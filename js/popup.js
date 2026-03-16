@@ -1,6 +1,8 @@
 const BLACKLIST_KEY = 'blackList'
 const DEFAULT_BLACKLIST = ['pornhub.com', 'bilibili.com', 'weibo.com']
 const MEDIA_DEFAULT_MINUTES_KEY = 'mediaAutoStopDefaultMinutes'
+const THEME_PREFERENCE_KEY = 'popupThemePreference'
+const THEME_PREFERENCE_CYCLE = ['system', 'dark', 'light']
 
 const container = document.getElementById('blacklist')
 const listCount = document.getElementById('listCount')
@@ -12,9 +14,65 @@ const cleanNowButton = document.getElementById('cleanNow')
 const mediaMinutesInput = document.getElementById('mediaMinutes')
 const mediaTimerToggle = document.getElementById('mediaTimerToggle')
 const mediaTimerStatus = document.getElementById('mediaTimerStatus')
+const themeToggle = document.getElementById('themeToggle')
+const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
 let mediaCountdownIntervalId = null
 let currentBlacklist = []
 let currentDomainPendingMap = {}
+let currentThemePreference = 'system'
+
+const getResolvedTheme = (preference = currentThemePreference) => {
+  if (preference === 'dark' || preference === 'light') {
+    return preference
+  }
+
+  return systemThemeQuery.matches ? 'dark' : 'light'
+}
+
+const getThemeToggleLabel = (preference) => {
+  if (preference === 'dark') return '主题：深色'
+  if (preference === 'light') return '主题：浅色'
+  return '主题：跟随系统'
+}
+
+const applyThemePreference = (preference = 'system') => {
+  currentThemePreference = preference
+  document.documentElement.dataset.theme = getResolvedTheme(preference)
+
+  if (!themeToggle) return
+
+  const resolvedTheme = getResolvedTheme(preference)
+  const nextPreference = THEME_PREFERENCE_CYCLE[(THEME_PREFERENCE_CYCLE.indexOf(preference) + 1) % THEME_PREFERENCE_CYCLE.length]
+  const nextThemeText = nextPreference === 'system'
+    ? `跟随系统（当前${resolvedTheme === 'dark' ? '深色' : '浅色'}）`
+    : nextPreference === 'dark'
+      ? '深色'
+      : '浅色'
+
+  themeToggle.textContent = getThemeToggleLabel(preference)
+  themeToggle.setAttribute('aria-pressed', String(resolvedTheme === 'dark'))
+  themeToggle.setAttribute('aria-label', `当前${themeToggle.textContent}，点击切换到${nextThemeText}`)
+  themeToggle.title = `点击切换到${nextThemeText}`
+}
+
+const loadThemePreference = () => {
+  chrome.storage.sync.get([THEME_PREFERENCE_KEY], (result) => {
+    const storedPreference = result[THEME_PREFERENCE_KEY]
+    const preference = THEME_PREFERENCE_CYCLE.includes(storedPreference) ? storedPreference : 'system'
+    applyThemePreference(preference)
+  })
+}
+
+const cycleThemePreference = () => {
+  const currentIndex = THEME_PREFERENCE_CYCLE.indexOf(currentThemePreference)
+  const nextPreference = THEME_PREFERENCE_CYCLE[(currentIndex + 1) % THEME_PREFERENCE_CYCLE.length]
+
+  themeToggle.disabled = true
+  chrome.storage.sync.set({ [THEME_PREFERENCE_KEY]: nextPreference }, () => {
+    themeToggle.disabled = false
+    applyThemePreference(nextPreference)
+  })
+}
 
 const setStatus = (message, type = '') => {
   status.textContent = message
@@ -346,6 +404,22 @@ const stopMediaTimer = () => {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  loadThemePreference()
+
+  if (typeof systemThemeQuery.addEventListener === 'function') {
+    systemThemeQuery.addEventListener('change', () => {
+      if (currentThemePreference === 'system') {
+        applyThemePreference('system')
+      }
+    })
+  } else if (typeof systemThemeQuery.addListener === 'function') {
+    systemThemeQuery.addListener(() => {
+      if (currentThemePreference === 'system') {
+        applyThemePreference('system')
+      }
+    })
+  }
+
   chrome.storage.sync.get([MEDIA_DEFAULT_MINUTES_KEY], (result) => {
     const minutes = Number.parseInt(result[MEDIA_DEFAULT_MINUTES_KEY], 10)
     mediaMinutesInput.value = Number.isInteger(minutes) && minutes >= 1 && minutes <= 1440 ? minutes : 30
@@ -370,6 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
       addDomain()
     }
   })
+  themeToggle.addEventListener('click', cycleThemePreference)
 
   container.addEventListener('click', (e) => {
     if (e.target.tagName !== 'BUTTON') return
