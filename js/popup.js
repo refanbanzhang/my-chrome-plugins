@@ -1,5 +1,6 @@
 const BLACKLIST_KEY = 'blackList'
 const DEFAULT_BLACKLIST = ['pornhub.com', 'bilibili.com', 'weibo.com']
+const MEDIA_DEFAULT_MINUTES_KEY = 'mediaAutoStopDefaultMinutes'
 
 const container = document.getElementById('blacklist')
 const listCount = document.getElementById('listCount')
@@ -7,6 +8,10 @@ const status = document.getElementById('status')
 const input = document.getElementById('newDomain')
 const addButton = document.getElementById('addDomain')
 const cleanNowButton = document.getElementById('cleanNow')
+const mediaMinutesInput = document.getElementById('mediaMinutes')
+const mediaTimerToggle = document.getElementById('mediaTimerToggle')
+const mediaTimerStatus = document.getElementById('mediaTimerStatus')
+let mediaCountdownIntervalId = null
 
 const setStatus = (message, type = '') => {
   status.textContent = message
@@ -14,6 +19,55 @@ const setStatus = (message, type = '') => {
   if (type) {
     status.classList.add(`history-popup__status--${type}`)
   }
+}
+
+const setMediaTimerStatus = (message, type = '') => {
+  mediaTimerStatus.textContent = message
+  mediaTimerStatus.className = 'history-popup__inline-status'
+  if (type) {
+    mediaTimerStatus.classList.add(`history-popup__inline-status--${type}`)
+  }
+}
+
+const formatRemainingTime = (totalSeconds) => {
+  const safeSeconds = Math.max(0, totalSeconds)
+  const minutes = Math.floor(safeSeconds / 60)
+  const seconds = safeSeconds % 60
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+const clearMediaCountdownInterval = () => {
+  if (!mediaCountdownIntervalId) return
+  window.clearInterval(mediaCountdownIntervalId)
+  mediaCountdownIntervalId = null
+}
+
+const applyMediaTimerState = (isRunning, remainingTime = 0) => {
+  clearMediaCountdownInterval()
+
+  if (!isRunning) {
+    mediaTimerToggle.dataset.mode = 'start'
+    mediaTimerToggle.textContent = '开始倒计时'
+    mediaMinutesInput.disabled = false
+    setMediaTimerStatus('倒计时未启动')
+    return
+  }
+
+  let currentSeconds = Math.max(0, remainingTime)
+  mediaTimerToggle.dataset.mode = 'stop'
+  mediaTimerToggle.textContent = '停止倒计时'
+  mediaMinutesInput.disabled = true
+  setMediaTimerStatus(`倒计时进行中：${formatRemainingTime(currentSeconds)}`, 'running')
+
+  mediaCountdownIntervalId = window.setInterval(() => {
+    currentSeconds -= 1
+    if (currentSeconds <= 0) {
+      clearMediaCountdownInterval()
+      applyMediaTimerState(false)
+      return
+    }
+    setMediaTimerStatus(`倒计时进行中：${formatRemainingTime(currentSeconds)}`, 'running')
+  }, 1000)
 }
 
 const normalizeDomain = (inputValue) => {
@@ -206,13 +260,88 @@ const runCleanupNow = () => {
   })
 }
 
+const refreshMediaTimerStatus = () => {
+  chrome.runtime.sendMessage({ type: 'MEDIA_AUTO_STOP_STATUS' }, (response) => {
+    if (chrome.runtime.lastError) {
+      setMediaTimerStatus(`状态获取失败：${chrome.runtime.lastError.message}`, 'error')
+      return
+    }
+
+    if (!response || !response.ok) {
+      setMediaTimerStatus(`状态获取失败：${response && response.error ? response.error : '未知错误'}`, 'error')
+      return
+    }
+
+    applyMediaTimerState(response.isRunning, response.remainingTime)
+  })
+}
+
+const startMediaTimer = () => {
+  const minutes = Number.parseInt(mediaMinutesInput.value, 10)
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
+    setMediaTimerStatus('请输入 1-1440 之间的分钟数', 'error')
+    return
+  }
+
+  mediaTimerToggle.disabled = true
+  chrome.storage.sync.set({ [MEDIA_DEFAULT_MINUTES_KEY]: minutes }, () => {
+    chrome.runtime.sendMessage({ type: 'MEDIA_AUTO_STOP_START', minutes }, (response) => {
+      mediaTimerToggle.disabled = false
+
+      if (chrome.runtime.lastError) {
+        setMediaTimerStatus(`启动失败：${chrome.runtime.lastError.message}`, 'error')
+        return
+      }
+
+      if (!response || !response.ok) {
+        setMediaTimerStatus(`启动失败：${response && response.error ? response.error : '未知错误'}`, 'error')
+        return
+      }
+
+      applyMediaTimerState(true, response.remainingTime)
+    })
+  })
+}
+
+const stopMediaTimer = () => {
+  mediaTimerToggle.disabled = true
+  chrome.runtime.sendMessage({ type: 'MEDIA_AUTO_STOP_STOP' }, (response) => {
+    mediaTimerToggle.disabled = false
+
+    if (chrome.runtime.lastError) {
+      setMediaTimerStatus(`停止失败：${chrome.runtime.lastError.message}`, 'error')
+      return
+    }
+
+    if (!response || !response.ok) {
+      setMediaTimerStatus(`停止失败：${response && response.error ? response.error : '未知错误'}`, 'error')
+      return
+    }
+
+    applyMediaTimerState(false)
+  })
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  chrome.storage.sync.get([MEDIA_DEFAULT_MINUTES_KEY], (result) => {
+    const minutes = Number.parseInt(result[MEDIA_DEFAULT_MINUTES_KEY], 10)
+    mediaMinutesInput.value = Number.isInteger(minutes) && minutes >= 1 && minutes <= 1440 ? minutes : 30
+  })
+  refreshMediaTimerStatus()
+
   ensureBlacklistInStorage(() => {
     refreshBlacklist()
   })
 
   addButton.addEventListener('click', addDomain)
   cleanNowButton.addEventListener('click', runCleanupNow)
+  mediaTimerToggle.addEventListener('click', () => {
+    if (mediaTimerToggle.dataset.mode === 'stop') {
+      stopMediaTimer()
+      return
+    }
+    startMediaTimer()
+  })
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       addDomain()

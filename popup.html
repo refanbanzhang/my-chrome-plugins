@@ -4,36 +4,61 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="popup.css">
-  <title>历史记录过滤</title>
+  <title>微博助手·历史清理·媒体停播</title>
 </head>
 <body>
   <div class="history-popup">
-    <h2 class="history-popup__title">历史记录过滤</h2>
-    <p class="history-popup__subtitle">命中下列域名时，将自动清理对应浏览历史。</p>
+    <h2 class="history-popup__title">助手控制台</h2>
+    <p class="history-popup__subtitle">媒体定时停止 + 历史记录自动清理</p>
 
-    <div class="history-popup__meta">
-      <span>过滤列表</span>
-      <span id="listCount" class="history-popup__count">0</span>
-    </div>
+    <section class="history-popup__section">
+      <h3 class="history-popup__section-title">媒体自动停止</h3>
+      <p class="history-popup__section-tip">倒计时结束后，自动停止所有标签页中的音视频播放。</p>
 
-    <div id="blacklist" class="history-popup__list"></div>
-    <p id="status" class="history-popup__status" aria-live="polite"></p>
+      <div class="history-popup__timer-row">
+        <input
+          type="number"
+          id="mediaMinutes"
+          class="history-popup__input history-popup__input--short"
+          min="1"
+          max="1440"
+          value="30"
+          placeholder="分钟"
+          aria-label="媒体倒计时分钟数"
+        >
+        <button id="mediaTimerToggle" class="btn btn--primary" type="button">开始倒计时</button>
+      </div>
+      <p id="mediaTimerStatus" class="history-popup__inline-status">倒计时未启动</p>
+    </section>
 
-    <div class="history-popup__actions">
-      <button id="cleanNow" class="btn btn--secondary" type="button">立即清理</button>
-    </div>
+    <section class="history-popup__section">
+      <h3 class="history-popup__section-title">历史记录过滤</h3>
+      <p class="history-popup__section-tip">命中下列域名时，将自动清理对应浏览历史。</p>
 
-    <div class="history-popup__form">
-      <input
-        type="text"
-        id="newDomain"
-        class="history-popup__input"
-        placeholder="例如：weibo.com"
-        aria-label="新增过滤域名"
-        autocomplete="off"
-      >
-      <button id="addDomain" class="btn btn--primary" type="button">添加</button>
-    </div>
+      <div class="history-popup__meta">
+        <span>过滤列表</span>
+        <span id="listCount" class="history-popup__count">0</span>
+      </div>
+
+      <div id="blacklist" class="history-popup__list"></div>
+      <p id="status" class="history-popup__status" aria-live="polite"></p>
+
+      <div class="history-popup__actions">
+        <button id="cleanNow" class="btn btn--secondary" type="button">立即清理</button>
+      </div>
+
+      <div class="history-popup__form">
+        <input
+          type="text"
+          id="newDomain"
+          class="history-popup__input"
+          placeholder="例如：weibo.com"
+          aria-label="新增过滤域名"
+          autocomplete="off"
+        >
+        <button id="addDomain" class="btn btn--primary" type="button">添加</button>
+      </div>
+    </section>
   </div>
   <script src="./js/popup.js"></script>
 </body>

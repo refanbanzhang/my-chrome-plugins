@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "微博助手与历史清理",
+  "name": "微博助手·历史清理·媒体停播",
   "version": "1.0.0",
-  "description": "微博发帖辅助 + 黑名单历史记录自动清理",
+  "description": "微博发帖辅助 + 黑名单历史清理 + 媒体倒计时自动停止",
   "icons": {
     "16": "img/icon.png",
     "48": "img/icon.png",
@@ -18,7 +18,8 @@
   "action": {
     "default_popup": "popup.html"
   },
-  "permissions": ["tabs", "storage", "history"],
+  "permissions": ["tabs", "storage", "history", "scripting", "alarms", "notifications"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "js/background.js"
   }
