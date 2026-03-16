@@ -7,7 +7,7 @@ const DEFAULT_MEDIA_SETTINGS = {
   [MEDIA_DEFAULT_MINUTES_KEY]: 30,
   [MEDIA_NOTIFICATION_KEY]: true
 }
-const HISTORY_SEARCH_MAX_RESULTS = 300
+const HISTORY_SEARCH_MAX_RESULTS = 5000
 const HISTORY_SWEEP_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
 const HISTORY_DOMAIN_SWEEP_COOLDOWN_MS = 5 * 60 * 1000
 let blackList = [...DEFAULT_BLACKLIST]
@@ -101,17 +101,60 @@ const getStoredBlacklist = () => new Promise((resolve) => {
   })
 })
 
-const searchMatchedHistoryByDomain = (domain) => new Promise((resolve) => {
+const searchHistoryInWindow = (text = '') => new Promise((resolve) => {
   const startTime = Date.now() - HISTORY_SWEEP_WINDOW_MS
   chrome.history.search({
-    text: domain,
+    text,
     startTime,
     maxResults: HISTORY_SEARCH_MAX_RESULTS
   }, (historyItems) => {
-    const matched = historyItems.filter((item) => item.url && isDomainMatch(item.url, domain))
-    resolve(matched)
+    resolve(Array.isArray(historyItems) ? historyItems : [])
   })
 })
+
+const searchMatchedHistoryByDomain = async (domain) => {
+  const directItems = await searchHistoryInWindow(domain)
+  const directMatched = directItems.filter((item) => item.url && isDomainMatch(item.url, domain))
+  if (directMatched.length > 0) {
+    return directMatched
+  }
+
+  // Fallback to broad scan: Chrome history text search may miss some URL forms.
+  const allItems = await searchHistoryInWindow('')
+  return allItems.filter((item) => item.url && isDomainMatch(item.url, domain))
+}
+
+const getMatchedCleanupStatsForDomains = async (domains) => {
+  const allItems = await searchHistoryInWindow('')
+  const uniqueUrls = new Set()
+  const domainUrlSets = {}
+
+  domains.forEach((domain) => {
+    domainUrlSets[domain] = new Set()
+  })
+
+  allItems.forEach((item) => {
+    if (!item || !item.url) return
+
+    let matched = false
+    domains.forEach((domain) => {
+      if (!isDomainMatch(item.url, domain)) return
+      domainUrlSets[domain].add(item.url)
+      matched = true
+    })
+
+    if (matched) {
+      uniqueUrls.add(item.url)
+    }
+  })
+
+  const domainPendingMap = {}
+  domains.forEach((domain) => {
+    domainPendingMap[domain] = domainUrlSets[domain].size
+  })
+
+  return { uniqueUrls, domainPendingMap }
+}
 
 const deleteHistoryUrl = (url) => new Promise((resolve) => {
   chrome.history.deleteUrl({ url }, () => {
@@ -143,10 +186,22 @@ const cleanupNow = async () => {
     return { removedCount: 0, domainCount: 0 }
   }
 
-  const removedList = await Promise.all(domains.map((domain) => cleanupHistoryForDomain(domain, { force: true })))
-  const removedCount = removedList.reduce((sum, value) => sum + value, 0)
+  const { uniqueUrls } = await getMatchedCleanupStatsForDomains(domains)
+  await Promise.all([...uniqueUrls].map(deleteHistoryUrl))
+  const removedCount = uniqueUrls.size
 
   return { removedCount, domainCount: domains.length }
+}
+
+const getPendingCleanupSummary = async () => {
+  const domains = await getStoredBlacklist()
+  if (!domains.length) {
+    return { pendingCount: 0, domainPendingMap: {} }
+  }
+
+  const { uniqueUrls, domainPendingMap } = await getMatchedCleanupStatsForDomains(domains)
+
+  return { pendingCount: uniqueUrls.size, domainPendingMap }
 }
 
 const stopAllMediaPlayback = async () => {
@@ -255,7 +310,7 @@ const handleMediaCountdownEnd = async () => {
 
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: 'img/icon.png',
+      iconUrl: 'img/icon-128.png',
       title: '媒体自动停止',
       message
     })
@@ -303,11 +358,6 @@ chrome.tabs.onActivated.addListener((tab) => {
   })
 })
 
-chrome.tabs.onUpdated.addListener((_, changeInfo, tab) => {
-  if (changeInfo.status !== 'complete') return
-  removeHistoryFromBlackList(tab && tab.url)
-})
-
 chrome.storage.onChanged.addListener((changes) => {
   if (changes[BLACKLIST_KEY]) {
     blackList = changes[BLACKLIST_KEY].newValue || []
@@ -340,6 +390,25 @@ chrome.runtime.onMessage.addListener((message, _, sendResponse) => {
         sendResponse({
           ok: false,
           error: error && error.message ? error.message : '清理失败'
+        })
+      })
+
+    return true
+  }
+
+  if (message.type === 'GET_PENDING_CLEANUP_SUMMARY') {
+    getPendingCleanupSummary()
+      .then(({ pendingCount, domainPendingMap }) => {
+        sendResponse({
+          ok: true,
+          pendingCount,
+          domainPendingMap
+        })
+      })
+      .catch((error) => {
+        sendResponse({
+          ok: false,
+          error: error && error.message ? error.message : '获取待清理记录失败'
         })
       })
 

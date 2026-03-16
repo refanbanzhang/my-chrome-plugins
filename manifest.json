@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "description": "微博发帖辅助 + 黑名单历史清理 + 媒体倒计时自动停止",
   "icons": {
-    "16": "img/icon.png",
-    "48": "img/icon.png",
-    "128": "img/icon.png"
+    "16": "img/icon-16.png",
+    "48": "img/icon-48.png",
+    "128": "img/icon-128.png"
   },
   "content_scripts": [
     {
@@ -16,7 +16,11 @@
     }
   ],
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "img/icon-16.png",
+      "32": "img/icon-32.png"
+    }
   },
   "permissions": ["tabs", "storage", "history", "scripting", "alarms", "notifications"],
   "host_permissions": ["<all_urls>"],

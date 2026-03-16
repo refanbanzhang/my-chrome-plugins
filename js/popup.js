@@ -4,6 +4,7 @@ const MEDIA_DEFAULT_MINUTES_KEY = 'mediaAutoStopDefaultMinutes'
 
 const container = document.getElementById('blacklist')
 const listCount = document.getElementById('listCount')
+const pendingCount = document.getElementById('pendingCount')
 const status = document.getElementById('status')
 const input = document.getElementById('newDomain')
 const addButton = document.getElementById('addDomain')
@@ -12,6 +13,8 @@ const mediaMinutesInput = document.getElementById('mediaMinutes')
 const mediaTimerToggle = document.getElementById('mediaTimerToggle')
 const mediaTimerStatus = document.getElementById('mediaTimerStatus')
 let mediaCountdownIntervalId = null
+let currentBlacklist = []
+let currentDomainPendingMap = {}
 
 const setStatus = (message, type = '') => {
   status.textContent = message
@@ -121,7 +124,38 @@ const requestCleanupNowWithRetry = (retryCount = 1) => {
   })
 }
 
-const renderBlacklist = (blackList) => {
+const requestPendingCleanupSummaryWithRetry = (retryCount = 1) => {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({ type: 'GET_PENDING_CLEANUP_SUMMARY' }, (response) => {
+      if (chrome.runtime.lastError) {
+        if (retryCount > 0) {
+          window.setTimeout(() => {
+            requestPendingCleanupSummaryWithRetry(retryCount - 1).then(resolve).catch(reject)
+          }, 150)
+          return
+        }
+
+        reject(new Error(chrome.runtime.lastError.message))
+        return
+      }
+
+      if (!response || !response.ok) {
+        reject(new Error(response && response.error ? response.error : '未知错误'))
+        return
+      }
+
+      resolve(response)
+    })
+  })
+}
+
+const getDomainPendingCountText = (domain, domainPendingMap) => {
+  const count = domainPendingMap[domain]
+  return Number.isInteger(count) && count >= 0 ? String(count) : '...'
+}
+
+const renderBlacklist = (blackList, domainPendingMap = currentDomainPendingMap) => {
+  currentBlacklist = [...blackList]
   container.innerHTML = ''
   listCount.textContent = String(blackList.length)
 
@@ -137,9 +171,16 @@ const renderBlacklist = (blackList) => {
     const item = document.createElement('div')
     item.className = 'history-popup__item'
 
+    const domainWrap = document.createElement('div')
+    domainWrap.className = 'history-popup__domain-wrap'
+
     const domainText = document.createElement('span')
     domainText.className = 'history-popup__domain'
     domainText.textContent = domain
+
+    const pendingBadge = document.createElement('span')
+    pendingBadge.className = 'history-popup__domain-pending'
+    pendingBadge.textContent = `待清理 ${getDomainPendingCountText(domain, domainPendingMap)}`
 
     const button = document.createElement('button')
     button.type = 'button'
@@ -147,15 +188,34 @@ const renderBlacklist = (blackList) => {
     button.dataset.domain = domain
     button.textContent = '删除'
 
-    item.appendChild(domainText)
+    domainWrap.appendChild(domainText)
+    domainWrap.appendChild(pendingBadge)
+    item.appendChild(domainWrap)
     item.appendChild(button)
     container.appendChild(item)
   })
 }
 
+const refreshPendingCleanupCount = () => {
+  pendingCount.textContent = '...'
+  requestPendingCleanupSummaryWithRetry(1)
+    .then(({ pendingCount: count, domainPendingMap }) => {
+      pendingCount.textContent = String(count)
+      currentDomainPendingMap = domainPendingMap || {}
+      renderBlacklist(currentBlacklist, currentDomainPendingMap)
+    })
+    .catch(() => {
+      pendingCount.textContent = '-'
+      currentDomainPendingMap = {}
+      renderBlacklist(currentBlacklist, currentDomainPendingMap)
+    })
+}
+
 const refreshBlacklist = () => {
   getBlacklist((blackList) => {
-    renderBlacklist(blackList)
+    currentDomainPendingMap = {}
+    renderBlacklist(blackList, currentDomainPendingMap)
+    refreshPendingCleanupCount()
   })
 }
 
@@ -219,6 +279,7 @@ const runCleanupNow = () => {
     })
     .finally(() => {
       setCleanupLoading(false)
+      refreshPendingCleanupCount()
     })
 }
 

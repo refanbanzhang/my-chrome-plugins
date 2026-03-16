@@ -8,8 +8,13 @@
 </head>
 <body>
   <div class="history-popup">
-    <h2 class="history-popup__title">助手控制台</h2>
-    <p class="history-popup__subtitle">媒体定时停止 + 历史记录自动清理</p>
+    <div class="history-popup__hero">
+      <img src="img/logo.svg" alt="微博助手 logo" class="history-popup__logo">
+      <div class="history-popup__heading">
+        <h2 class="history-popup__title">助手控制台</h2>
+        <p class="history-popup__subtitle">媒体定时停止 + 历史记录自动清理</p>
+      </div>
+    </div>
 
     <section class="history-popup__section">
       <h3 class="history-popup__section-title">媒体自动停止</h3>
@@ -36,8 +41,14 @@
       <p class="history-popup__section-tip">命中下列域名时，将自动清理对应浏览历史。</p>
 
       <div class="history-popup__meta">
-        <span>过滤列表</span>
-        <span id="listCount" class="history-popup__count">0</span>
+        <div class="history-popup__meta-item">
+          <span>过滤列表</span>
+          <span id="listCount" class="history-popup__count">0</span>
+        </div>
+        <div class="history-popup__meta-item">
+          <span>待清理记录</span>
+          <span id="pendingCount" class="history-popup__count">0</span>
+        </div>
       </div>
 
       <div id="blacklist" class="history-popup__list"></div>

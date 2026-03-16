@@ -65,7 +65,7 @@
 - `popup.html`：弹窗结构
 - `popup.css`：弹窗样式
 - `js/content.js`：微博页面内容脚本（纯原生 JS，无 jQuery）
-- `img/icon.png`：扩展图标
+- `img/icon-*.png`：扩展图标资源
 
 ## 权限说明
 

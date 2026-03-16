@@ -1,0 +1,22 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="logoTitle logoDesc">
+  <title id="logoTitle">微博助手 Logo</title>
+  <desc id="logoDesc">媒体停播和历史清理功能的组合图标</desc>
+  <defs>
+    <linearGradient id="bgGradient" x1="4" y1="4" x2="124" y2="124" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3E7BFF"/>
+      <stop offset="1" stop-color="#1F5EFF"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="2" y="2" width="124" height="124" rx="32" fill="url(#bgGradient)"/>
+  <circle cx="64" cy="64" r="41" fill="#F8FBFF"/>
+
+  <rect x="37" y="47" width="28" height="28" rx="7" fill="#1F5EFF"/>
+  <path d="M79 46C87.28 46 94 52.72 94 61" stroke="#1F5EFF" stroke-width="6" stroke-linecap="round"/>
+  <path d="M94 61L84 56.5" stroke="#1F5EFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M94 61L88.5 70.5" stroke="#1F5EFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <path d="M45 86C50.5 92 57.8 95 66.5 95C75.2 95 82.5 92 88 86" stroke="#89A9FF" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="90" cy="36.5" r="3" fill="#FFFFFF"/>
+  <circle cx="96" cy="42" r="2" fill="#DCE7FF"/>
+</svg>
