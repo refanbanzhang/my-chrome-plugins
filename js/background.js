@@ -2,14 +2,16 @@ const BLACKLIST_KEY = 'blackList'
 const DEFAULT_BLACKLIST = ['pornhub.com', 'bilibili.com', 'weibo.com']
 const MEDIA_DEFAULT_MINUTES_KEY = 'mediaAutoStopDefaultMinutes'
 const MEDIA_NOTIFICATION_KEY = 'mediaAutoStopNotification'
-const MEDIA_COUNTDOWN_STATE_KEY = 'mediaAutoStopCountdownState'
 const MEDIA_ALARM_NAME = 'mediaAutoStopAlarm'
-const DEFAULT_MEDIA_COUNTDOWN_STATE = { isRunning: false, endTime: 0 }
 const DEFAULT_MEDIA_SETTINGS = {
   [MEDIA_DEFAULT_MINUTES_KEY]: 30,
   [MEDIA_NOTIFICATION_KEY]: true
 }
+const HISTORY_SEARCH_MAX_RESULTS = 300
+const HISTORY_SWEEP_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
+const HISTORY_DOMAIN_SWEEP_COOLDOWN_MS = 5 * 60 * 1000
 let blackList = [...DEFAULT_BLACKLIST]
+const lastDomainSweepAt = new Map()
 
 const isDomainMatch = (url, domain) => {
   try {
@@ -50,12 +52,6 @@ const getMediaAlarm = () => new Promise((resolve) => {
 
 const clearMediaAlarm = () => new Promise((resolve) => {
   chrome.alarms.clear(MEDIA_ALARM_NAME, () => {
-    resolve()
-  })
-})
-
-const setMediaCountdownState = (state) => new Promise((resolve) => {
-  chrome.storage.local.set({ [MEDIA_COUNTDOWN_STATE_KEY]: state }, () => {
     resolve()
   })
 })
@@ -106,10 +102,11 @@ const getStoredBlacklist = () => new Promise((resolve) => {
 })
 
 const searchMatchedHistoryByDomain = (domain) => new Promise((resolve) => {
+  const startTime = Date.now() - HISTORY_SWEEP_WINDOW_MS
   chrome.history.search({
     text: domain,
-    startTime: 0,
-    maxResults: 1000
+    startTime,
+    maxResults: HISTORY_SEARCH_MAX_RESULTS
   }, (historyItems) => {
     const matched = historyItems.filter((item) => item.url && isDomainMatch(item.url, domain))
     resolve(matched)
@@ -122,7 +119,18 @@ const deleteHistoryUrl = (url) => new Promise((resolve) => {
   })
 })
 
-const cleanupHistoryForDomain = async (domain) => {
+const cleanupHistoryForDomain = async (domain, options = {}) => {
+  const { force = false } = options
+  const now = Date.now()
+
+  if (!force) {
+    const lastSweep = lastDomainSweepAt.get(domain) || 0
+    if (now - lastSweep < HISTORY_DOMAIN_SWEEP_COOLDOWN_MS) {
+      return 0
+    }
+    lastDomainSweepAt.set(domain, now)
+  }
+
   const matchedItems = await searchMatchedHistoryByDomain(domain)
   const uniqueUrls = [...new Set(matchedItems.map((item) => item.url))]
   await Promise.all(uniqueUrls.map(deleteHistoryUrl))
@@ -135,10 +143,8 @@ const cleanupNow = async () => {
     return { removedCount: 0, domainCount: 0 }
   }
 
-  let removedCount = 0
-  for (const domain of domains) {
-    removedCount += await cleanupHistoryForDomain(domain)
-  }
+  const removedList = await Promise.all(domains.map((domain) => cleanupHistoryForDomain(domain, { force: true })))
+  const removedCount = removedList.reduce((sum, value) => sum + value, 0)
 
   return { removedCount, domainCount: domains.length }
 }
@@ -146,7 +152,6 @@ const cleanupNow = async () => {
 const stopAllMediaPlayback = async () => {
   const tabs = await chrome.tabs.query({})
   let pausedCount = 0
-  let touchedTabs = 0
 
   await Promise.all(tabs.map(async (tab) => {
     if (!tab.id || !tab.url || !isInjectableUrl(tab.url)) {
@@ -171,31 +176,29 @@ const stopAllMediaPlayback = async () => {
       const currentTabPaused = (results && results[0] && results[0].result) || 0
       if (currentTabPaused > 0) {
         pausedCount += currentTabPaused
-        touchedTabs += 1
       }
     } catch (error) {
       console.error(`向标签页 ${tab.id} 注入脚本失败:`, error)
     }
   }))
 
-  return { pausedCount, touchedTabs }
+  return { pausedCount }
 }
 
 const syncMediaCountdownState = async () => {
   const alarm = await getMediaAlarm()
   const now = Date.now()
 
-  if (!alarm || !alarm.scheduledTime || alarm.scheduledTime <= now) {
-    await clearMediaAlarm()
-    await setMediaCountdownState({ ...DEFAULT_MEDIA_COUNTDOWN_STATE })
+  if (!alarm || !alarm.scheduledTime) {
     setMediaBadge(false)
     return
   }
 
-  await setMediaCountdownState({
-    isRunning: true,
-    endTime: alarm.scheduledTime
-  })
+  if (alarm.scheduledTime <= now) {
+    await handleMediaCountdownEnd()
+    return
+  }
+
   setMediaBadge(true)
 }
 
@@ -208,7 +211,6 @@ const startMediaCountdown = async (minutes) => {
   const endTime = Date.now() + safeMinutes * 60 * 1000
   await clearMediaAlarm()
   chrome.alarms.create(MEDIA_ALARM_NAME, { when: endTime })
-  await setMediaCountdownState({ isRunning: true, endTime })
   setMediaBadge(true)
 
   return {
@@ -219,7 +221,6 @@ const startMediaCountdown = async (minutes) => {
 
 const stopMediaCountdown = async () => {
   await clearMediaAlarm()
-  await setMediaCountdownState({ ...DEFAULT_MEDIA_COUNTDOWN_STATE })
   setMediaBadge(false)
   return { isRunning: false, remainingTime: 0 }
 }
@@ -227,18 +228,16 @@ const stopMediaCountdown = async () => {
 const getMediaCountdownStatus = async () => {
   const alarm = await getMediaAlarm()
   if (!alarm || !alarm.scheduledTime) {
-    await setMediaCountdownState({ ...DEFAULT_MEDIA_COUNTDOWN_STATE })
     setMediaBadge(false)
     return { isRunning: false, remainingTime: 0 }
   }
 
   const remainingTime = Math.max(0, Math.floor((alarm.scheduledTime - Date.now()) / 1000))
   if (remainingTime <= 0) {
-    await stopMediaCountdown()
+    await handleMediaCountdownEnd()
     return { isRunning: false, remainingTime: 0 }
   }
 
-  await setMediaCountdownState({ isRunning: true, endTime: alarm.scheduledTime })
   setMediaBadge(true)
   return { isRunning: true, remainingTime }
 }
@@ -270,6 +269,10 @@ const removeHistoryFromBlackList = (url) => {
     const blacklistedDomain = blackList.find((domain) => isDomainMatch(url, domain))
     if (!blacklistedDomain) return
 
+    deleteHistoryUrl(url).catch((error) => {
+      console.error('删除当前历史记录失败:', error)
+    })
+
     cleanupHistoryForDomain(blacklistedDomain).catch((error) => {
       console.error('自动清理历史记录失败:', error)
     })
@@ -298,6 +301,11 @@ chrome.tabs.onActivated.addListener((tab) => {
   chrome.tabs.get(tab.tabId, (currentTab) => {
     removeHistoryFromBlackList(currentTab && currentTab.url)
   })
+})
+
+chrome.tabs.onUpdated.addListener((_, changeInfo, tab) => {
+  if (changeInfo.status !== 'complete') return
+  removeHistoryFromBlackList(tab && tab.url)
 })
 
 chrome.storage.onChanged.addListener((changes) => {

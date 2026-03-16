@@ -96,52 +96,29 @@ const setBlacklist = (blackList, callback) => {
   })
 }
 
-const isDomainMatch = (url, domain) => {
-  try {
-    const hostname = new URL(url).hostname.toLowerCase()
-    return hostname === domain || hostname.endsWith(`.${domain}`)
-  } catch {
-    return false
-  }
-}
+const requestCleanupNowWithRetry = (retryCount = 1) => {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({ type: 'RUN_CLEANUP_NOW' }, (response) => {
+      if (chrome.runtime.lastError) {
+        if (retryCount > 0) {
+          window.setTimeout(() => {
+            requestCleanupNowWithRetry(retryCount - 1).then(resolve).catch(reject)
+          }, 150)
+          return
+        }
 
-const searchMatchedHistoryByDomain = (domain) => new Promise((resolve) => {
-  chrome.history.search({
-    text: domain,
-    startTime: 0,
-    maxResults: 1000
-  }, (historyItems) => {
-    const matched = historyItems.filter((item) => item.url && isDomainMatch(item.url, domain))
-    resolve(matched)
-  })
-})
+        reject(new Error(chrome.runtime.lastError.message))
+        return
+      }
 
-const deleteHistoryUrl = (url) => new Promise((resolve) => {
-  chrome.history.deleteUrl({ url }, () => {
-    resolve()
-  })
-})
+      if (!response || !response.ok) {
+        reject(new Error(response && response.error ? response.error : '未知错误'))
+        return
+      }
 
-const cleanupLocally = async () => {
-  const domains = await new Promise((resolve) => {
-    getBlacklist((blackList) => {
-      resolve(blackList)
+      resolve(response)
     })
   })
-
-  if (!domains.length) {
-    return { removedCount: 0, domainCount: 0 }
-  }
-
-  let removedCount = 0
-  for (const domain of domains) {
-    const matchedItems = await searchMatchedHistoryByDomain(domain)
-    const uniqueUrls = [...new Set(matchedItems.map((item) => item.url))]
-    await Promise.all(uniqueUrls.map(deleteHistoryUrl))
-    removedCount += uniqueUrls.length
-  }
-
-  return { removedCount, domainCount: domains.length }
 }
 
 const renderBlacklist = (blackList) => {
@@ -233,31 +210,16 @@ const runCleanupNow = () => {
   setCleanupLoading(true)
   setStatus('正在清理，请稍候...')
 
-  chrome.runtime.sendMessage({ type: 'RUN_CLEANUP_NOW' }, (response) => {
-    if (chrome.runtime.lastError) {
-      cleanupLocally()
-        .then(({ removedCount, domainCount }) => {
-          setStatus(`后台不可用，已本地清理 ${removedCount} 条（${domainCount} 个域名）。`, 'success')
-        })
-        .catch((error) => {
-          setStatus(`清理失败：${error && error.message ? error.message : '未知错误'}`, 'error')
-        })
-        .finally(() => {
-          setCleanupLoading(false)
-        })
-      return
-    }
-
-    if (!response || !response.ok) {
-      setStatus(`清理失败：${response && response.error ? response.error : '未知错误'}`, 'error')
+  requestCleanupNowWithRetry(1)
+    .then(({ removedCount, domainCount }) => {
+      setStatus(`清理完成：已删除 ${removedCount} 条历史记录（${domainCount} 个域名）。`, 'success')
+    })
+    .catch((error) => {
+      setStatus(`清理失败：${error && error.message ? error.message : '未知错误'}`, 'error')
+    })
+    .finally(() => {
       setCleanupLoading(false)
-      return
-    }
-
-    const { removedCount, domainCount } = response
-    setStatus(`清理完成：已删除 ${removedCount} 条历史记录（${domainCount} 个域名）。`, 'success')
-    setCleanupLoading(false)
-  })
+    })
 }
 
 const refreshMediaTimerStatus = () => {
