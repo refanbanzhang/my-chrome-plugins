@@ -4,15 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="popup.css">
-  <title>微博助手·历史清理·媒体停播</title>
+  <title data-i18n="popupDocumentTitle">微博助手·历史清理·媒体停播</title>
 </head>
 <body>
   <div class="history-popup">
     <div class="history-popup__hero">
-      <img src="img/logo.svg" alt="微博助手 logo" class="history-popup__logo">
+      <img src="img/logo.svg" alt="微博助手 logo" class="history-popup__logo" data-i18n-alt="logoAlt">
       <div class="history-popup__heading">
-        <h2 class="history-popup__title">助手控制台</h2>
-        <p class="history-popup__subtitle">媒体定时停止 + 历史记录自动清理</p>
+        <h2 class="history-popup__title" data-i18n="popupTitle">助手控制台</h2>
+        <p class="history-popup__subtitle" data-i18n="popupSubtitle">媒体定时停止 + 历史记录自动清理</p>
+        <p id="syncStatus" class="history-popup__sync-status" aria-live="polite" data-i18n="syncStatusSynced">同步状态：已同步</p>
       </div>
       <button
         id="themeToggle"
@@ -25,8 +26,17 @@
     </div>
 
     <section class="history-popup__section">
-      <h3 class="history-popup__section-title">媒体自动停止</h3>
-      <p class="history-popup__section-tip">倒计时结束后，自动停止所有标签页中的音视频播放。</p>
+      <h3 class="history-popup__section-title" data-i18n="mediaSectionTitle">媒体自动停止</h3>
+      <p class="history-popup__section-tip" data-i18n="mediaSectionTip">倒计时结束后，自动停止所有标签页中的音视频播放。</p>
+
+      <div class="history-popup__preset-row">
+        <span class="history-popup__preset-label" data-i18n="mediaPresetLabel">快捷预设</span>
+        <div class="history-popup__preset-actions">
+          <button class="btn btn--ghost history-popup__preset-btn" type="button" data-minutes="15">15m</button>
+          <button class="btn btn--ghost history-popup__preset-btn" type="button" data-minutes="30">30m</button>
+          <button class="btn btn--ghost history-popup__preset-btn" type="button" data-minutes="60">60m</button>
+        </div>
+      </div>
 
       <div class="history-popup__timer-row">
         <input
@@ -38,23 +48,25 @@
           value="30"
           placeholder="分钟"
           aria-label="媒体倒计时分钟数"
+          data-i18n-placeholder="mediaMinutesPlaceholder"
+          data-i18n-aria-label="mediaMinutesAria"
         >
-        <button id="mediaTimerToggle" class="btn btn--primary" type="button">开始倒计时</button>
+        <button id="mediaTimerToggle" class="btn btn--primary" type="button" data-i18n="mediaStartButton">开始倒计时</button>
       </div>
-      <p id="mediaTimerStatus" class="history-popup__inline-status">倒计时未启动</p>
+      <p id="mediaTimerStatus" class="history-popup__inline-status" data-i18n="mediaTimerIdle">倒计时未启动</p>
     </section>
 
     <section class="history-popup__section">
-      <h3 class="history-popup__section-title">历史记录过滤</h3>
-      <p class="history-popup__section-tip">命中下列域名时，将自动清理对应浏览历史。</p>
+      <h3 class="history-popup__section-title" data-i18n="historySectionTitle">历史记录过滤</h3>
+      <p class="history-popup__section-tip" data-i18n="historySectionTip">命中下列域名时，将自动清理对应浏览历史。</p>
 
       <div class="history-popup__meta">
         <div class="history-popup__meta-item">
-          <span>过滤列表</span>
+          <span data-i18n="metaFilterList">过滤列表</span>
           <span id="listCount" class="history-popup__count">0</span>
         </div>
         <div class="history-popup__meta-item">
-          <span>待清理记录</span>
+          <span data-i18n="metaPendingList">待清理记录</span>
           <span id="pendingCount" class="history-popup__count">0</span>
         </div>
       </div>
@@ -63,7 +75,7 @@
       <p id="status" class="history-popup__status" aria-live="polite"></p>
 
       <div class="history-popup__actions">
-        <button id="cleanNow" class="btn btn--secondary" type="button">立即清理</button>
+        <button id="cleanNow" class="btn btn--secondary" type="button" data-i18n="cleanNowButton">立即清理</button>
       </div>
 
       <div class="history-popup__form">
@@ -71,14 +83,18 @@
           type="text"
           id="newDomain"
           class="history-popup__input"
-          placeholder="例如：weibo.com"
+          placeholder="例如：weibo.com 或 *.example.com"
           aria-label="新增过滤域名"
           autocomplete="off"
+          data-i18n-placeholder="newDomainPlaceholder"
+          data-i18n-aria-label="newDomainAria"
         >
-        <button id="addDomain" class="btn btn--primary" type="button">添加</button>
+        <button id="addDomain" class="btn btn--primary" type="button" data-i18n="addDomainButton">添加</button>
       </div>
     </section>
   </div>
+
+  <div id="toastContainer" class="history-popup__toast-container" aria-live="polite" aria-atomic="true"></div>
   <script src="./js/popup.js"></script>
 </body>
 </html>

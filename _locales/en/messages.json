@@ -1,0 +1,167 @@
+{
+  "extensionName": {
+    "message": "Weibo Assistant · History Cleaner · Media Stop"
+  },
+  "extensionDescription": {
+    "message": "Weibo post helper + blacklist history cleanup + media countdown auto-stop"
+  },
+  "extensionActionTitle": {
+    "message": "Weibo Assistant Console"
+  },
+  "popupDocumentTitle": {
+    "message": "Weibo Assistant · History Cleaner · Media Stop"
+  },
+  "popupTitle": {
+    "message": "Assistant Console"
+  },
+  "popupSubtitle": {
+    "message": "Timed media stop + automatic history cleanup"
+  },
+  "syncStatusSynced": {
+    "message": "Sync: Synced"
+  },
+  "syncStatusSyncing": {
+    "message": "Sync: Syncing..."
+  },
+  "syncStatusOffline": {
+    "message": "Sync: Offline"
+  },
+  "themeSystem": {
+    "message": "Theme: System"
+  },
+  "themeDark": {
+    "message": "Theme: Dark"
+  },
+  "themeLight": {
+    "message": "Theme: Light"
+  },
+  "themeSwitchTo": {
+    "message": "Switch to $1"
+  },
+  "logoAlt": {
+    "message": "Weibo Assistant logo"
+  },
+  "mediaSectionTitle": {
+    "message": "Auto-stop Media"
+  },
+  "mediaSectionTip": {
+    "message": "When countdown ends, all audio/video playback in tabs will be paused."
+  },
+  "mediaPresetLabel": {
+    "message": "Quick Presets"
+  },
+  "mediaPresetMinutes": {
+    "message": "$1m"
+  },
+  "mediaMinutesPlaceholder": {
+    "message": "Minutes"
+  },
+  "mediaMinutesAria": {
+    "message": "Media countdown minutes"
+  },
+  "mediaStartButton": {
+    "message": "Start Countdown"
+  },
+  "mediaStopButton": {
+    "message": "Stop Countdown"
+  },
+  "mediaTimerIdle": {
+    "message": "Countdown not started"
+  },
+  "mediaTimerRunning": {
+    "message": "Running: $1"
+  },
+  "mediaTimerStartedToast": {
+    "message": "Countdown started."
+  },
+  "mediaTimerStoppedToast": {
+    "message": "Countdown stopped."
+  },
+  "mediaMinutesRangeError": {
+    "message": "Enter a value between 1 and 1440 minutes"
+  },
+  "mediaStatusFetchFailed": {
+    "message": "Failed to get status: $1"
+  },
+  "mediaStartFailed": {
+    "message": "Failed to start: $1"
+  },
+  "mediaStopFailed": {
+    "message": "Failed to stop: $1"
+  },
+  "mediaNotificationTitle": {
+    "message": "Media Auto-stop"
+  },
+  "mediaNotificationStoppedSome": {
+    "message": "Countdown ended. Stopped $1 media elements"
+  },
+  "mediaNotificationStoppedNone": {
+    "message": "Countdown ended. No playing media found"
+  },
+  "historySectionTitle": {
+    "message": "History Filter"
+  },
+  "historySectionTip": {
+    "message": "When a URL matches any pattern below, related history will be cleaned automatically."
+  },
+  "metaFilterList": {
+    "message": "Filter List"
+  },
+  "metaPendingList": {
+    "message": "Pending Cleanup"
+  },
+  "cleanNowButton": {
+    "message": "Clean Now"
+  },
+  "cleanNowLoading": {
+    "message": "Cleaning..."
+  },
+  "addDomainButton": {
+    "message": "Add"
+  },
+  "newDomainPlaceholder": {
+    "message": "Example: weibo.com or *.example.com"
+  },
+  "newDomainAria": {
+    "message": "Add filter domain pattern"
+  },
+  "blacklistEmpty": {
+    "message": "No filter patterns yet. Add one to enable automatic cleanup."
+  },
+  "pendingBadge": {
+    "message": "Pending $1"
+  },
+  "deleteAction": {
+    "message": "Delete"
+  },
+  "dragHandle": {
+    "message": "::"
+  },
+  "invalidDomain": {
+    "message": "Enter a valid domain pattern, like weibo.com or *.example.com"
+  },
+  "domainExists": {
+    "message": "This domain is already in the list."
+  },
+  "domainAdded": {
+    "message": "Added to filter list."
+  },
+  "domainRemoved": {
+    "message": "Removed from filter list."
+  },
+  "sortSaved": {
+    "message": "Order updated."
+  },
+  "cleanupRunning": {
+    "message": "Cleaning in progress..."
+  },
+  "cleanupSuccess": {
+    "message": "Done: removed $1 history entries across $2 patterns."
+  },
+  "cleanupFailed": {
+    "message": "Cleanup failed: $1"
+  },
+  "unknownError": {
+    "message": "Unknown error"
+  }
+}

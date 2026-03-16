@@ -1,0 +1,167 @@
+{
+  "extensionName": {
+    "message": "微博助手·历史清理·媒体停播"
+  },
+  "extensionDescription": {
+    "message": "微博发帖辅助 + 黑名单历史清理 + 媒体倒计时自动停止"
+  },
+  "extensionActionTitle": {
+    "message": "微博助手控制台"
+  },
+  "popupDocumentTitle": {
+    "message": "微博助手·历史清理·媒体停播"
+  },
+  "popupTitle": {
+    "message": "助手控制台"
+  },
+  "popupSubtitle": {
+    "message": "媒体定时停止 + 历史记录自动清理"
+  },
+  "syncStatusSynced": {
+    "message": "同步状态：已同步"
+  },
+  "syncStatusSyncing": {
+    "message": "同步状态：同步中"
+  },
+  "syncStatusOffline": {
+    "message": "同步状态：离线"
+  },
+  "themeSystem": {
+    "message": "主题：跟随系统"
+  },
+  "themeDark": {
+    "message": "主题：深色"
+  },
+  "themeLight": {
+    "message": "主题：浅色"
+  },
+  "themeSwitchTo": {
+    "message": "点击切换到 $1"
+  },
+  "logoAlt": {
+    "message": "微博助手 logo"
+  },
+  "mediaSectionTitle": {
+    "message": "媒体自动停止"
+  },
+  "mediaSectionTip": {
+    "message": "倒计时结束后，自动停止所有标签页中的音视频播放。"
+  },
+  "mediaPresetLabel": {
+    "message": "快捷预设"
+  },
+  "mediaPresetMinutes": {
+    "message": "$1m"
+  },
+  "mediaMinutesPlaceholder": {
+    "message": "分钟"
+  },
+  "mediaMinutesAria": {
+    "message": "媒体倒计时分钟数"
+  },
+  "mediaStartButton": {
+    "message": "开始倒计时"
+  },
+  "mediaStopButton": {
+    "message": "停止倒计时"
+  },
+  "mediaTimerIdle": {
+    "message": "倒计时未启动"
+  },
+  "mediaTimerRunning": {
+    "message": "倒计时进行中：$1"
+  },
+  "mediaTimerStartedToast": {
+    "message": "倒计时已启动。"
+  },
+  "mediaTimerStoppedToast": {
+    "message": "倒计时已停止。"
+  },
+  "mediaMinutesRangeError": {
+    "message": "请输入 1-1440 之间的分钟数"
+  },
+  "mediaStatusFetchFailed": {
+    "message": "状态获取失败：$1"
+  },
+  "mediaStartFailed": {
+    "message": "启动失败：$1"
+  },
+  "mediaStopFailed": {
+    "message": "停止失败：$1"
+  },
+  "mediaNotificationTitle": {
+    "message": "媒体自动停止"
+  },
+  "mediaNotificationStoppedSome": {
+    "message": "倒计时结束，已停止 $1 个媒体播放"
+  },
+  "mediaNotificationStoppedNone": {
+    "message": "倒计时结束，未发现正在播放的媒体"
+  },
+  "historySectionTitle": {
+    "message": "历史记录过滤"
+  },
+  "historySectionTip": {
+    "message": "命中下列域名时，将自动清理对应浏览历史。"
+  },
+  "metaFilterList": {
+    "message": "过滤列表"
+  },
+  "metaPendingList": {
+    "message": "待清理记录"
+  },
+  "cleanNowButton": {
+    "message": "立即清理"
+  },
+  "cleanNowLoading": {
+    "message": "清理中..."
+  },
+  "addDomainButton": {
+    "message": "添加"
+  },
+  "newDomainPlaceholder": {
+    "message": "例如：weibo.com 或 *.example.com"
+  },
+  "newDomainAria": {
+    "message": "新增过滤域名"
+  },
+  "blacklistEmpty": {
+    "message": "暂无过滤域名，添加后将自动清理对应网站历史记录。"
+  },
+  "pendingBadge": {
+    "message": "待清理 $1"
+  },
+  "deleteAction": {
+    "message": "删除"
+  },
+  "dragHandle": {
+    "message": "::"
+  },
+  "invalidDomain": {
+    "message": "请输入有效域名，例如 weibo.com 或 *.example.com"
+  },
+  "domainExists": {
+    "message": "该域名已在过滤列表中。"
+  },
+  "domainAdded": {
+    "message": "已添加到过滤列表。"
+  },
+  "domainRemoved": {
+    "message": "已移除该域名。"
+  },
+  "sortSaved": {
+    "message": "排序已更新。"
+  },
+  "cleanupRunning": {
+    "message": "正在清理，请稍候..."
+  },
+  "cleanupSuccess": {
+    "message": "清理完成：已删除 $1 条历史记录（$2 个域名）。"
+  },
+  "cleanupFailed": {
+    "message": "清理失败：$1"
+  },
+  "unknownError": {
+    "message": "未知错误"
+  }
+}

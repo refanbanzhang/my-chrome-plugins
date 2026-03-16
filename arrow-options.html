@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Arrow Trigger Next/Prev 设置</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <div class="ambient"></div>
+    <main class="shell">
+      <header class="header">
+        <div class="badge">Extension Settings</div>
+        <h1>箭头键翻页规则</h1>
+        <p>
+          为奇怪命名的翻页按钮设置自定义选择器。支持多站点规则，按域名匹配，
+          优先级为站点规则 &gt; 全局规则 &gt; 自动识别。
+        </p>
+        <details class="usage-details">
+          <summary>使用说明与快捷键</summary>
+          <div class="usage-inner">
+            <p><kbd>←</kbd> 左方向键：上一页</p>
+            <p><kbd>→</kbd> 右方向键：下一页</p>
+            <p>在输入框、播放器内不会触发；可在下方为各站点单独配置选择器或禁用。</p>
+          </div>
+        </details>
+      </header>
+
+      <section class="card">
+        <div class="card-title">行为设置</div>
+        <div class="settings-grid">
+          <div class="settings-item">
+            <label class="toggle">
+              <input type="checkbox" id="enabledToggle" checked />
+              <span class="toggle-ui"></span>
+              <span class="toggle-text">启用扩展</span>
+            </label>
+            <em>关闭后此扩展不再监听箭头键。</em>
+          </div>
+          <div class="settings-item">
+            <label class="toggle">
+              <input type="checkbox" id="showToastToggle" />
+              <span class="toggle-ui"></span>
+              <span class="toggle-text">提示反馈</span>
+            </label>
+            <em>触发翻页或失败时显示提示。</em>
+          </div>
+          <label class="field compact">
+            <span>连续触发间隔 (ms)</span>
+            <input
+              id="cooldownMs"
+              type="number"
+              min="0"
+              max="5000"
+              step="50"
+              placeholder="0 表示不限制"
+              aria-describedby="cooldown-desc"
+            />
+            <em id="cooldown-desc">避免连续误触，建议 150~400。</em>
+          </label>
+          <div class="settings-item">
+            <label class="toggle">
+              <input type="checkbox" id="doubleTapOnly" />
+              <span class="toggle-ui"></span>
+              <span class="toggle-text">仅双击方向键触发</span>
+            </label>
+            <em>开启后需在间隔内连按两次同方向键才翻页，进一步防误触。</em>
+          </div>
+          <label class="field compact">
+            <span>提示显示时长 (ms)</span>
+            <input
+              id="toastDurationMs"
+              type="number"
+              min="500"
+              max="5000"
+              step="100"
+              placeholder="1200"
+              aria-describedby="toast-desc"
+            />
+            <em id="toast-desc">开启「提示反馈」后 Toast 的显示时长。</em>
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">全局选择器</div>
+        <div class="grid two">
+          <label class="field">
+            <span>上一页选择器</span>
+            <textarea
+              id="globalPrev"
+              placeholder="例：a.prev, button[data-action='prev']\n也可用逗号分隔"
+            ></textarea>
+            <em>支持 CSS 选择器，多条用逗号或换行分隔。</em>
+          </label>
+          <label class="field">
+            <span>下一页选择器</span>
+            <textarea
+              id="globalNext"
+              placeholder="例：a.next, button[data-action='next']\n也可用逗号分隔"
+            ></textarea>
+            <em>这些规则对所有网站生效。</em>
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">站点规则</div>
+        <div class="hint">
+          域名匹配支持：
+          <code>example.com</code>、<code>*.example.com</code> 或正则 <code>re:^news\.example\.com$</code>
+        </div>
+        <div id="rules" class="rules-list" role="list" aria-label="站点规则列表，可拖拽排序"></div>
+        <div class="rule-actions">
+          <button id="addRule" class="primary">+ 添加站点规则</button>
+          <button id="addCurrentSite" class="secondary" type="button">从当前站点添加</button>
+        </div>
+      </section>
+
+      <section class="card card-tools">
+        <div class="card-title">配置备份</div>
+        <div class="tool-actions">
+          <button id="exportBtn" class="ghost" type="button">导出配置</button>
+          <label class="file-label">
+            <input type="file" id="importFile" accept=".json" hidden />
+            <span class="ghost button">导入配置</span>
+          </label>
+          <button id="restoreDefaults" class="ghost danger" type="button">恢复默认</button>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div class="status" id="status" role="status" aria-live="polite">未保存</div>
+        <button id="save" class="ghost">保存</button>
+      </footer>
+    </main>
+
+    <template id="ruleTemplate">
+      <div class="rule" draggable="true" tabindex="0" role="listitem">
+        <div class="rule-head">
+          <span class="rule-drag" aria-hidden="true">⋮⋮</span>
+          <input class="pattern" placeholder="站点域名或匹配表达式" aria-label="域名或匹配表达式" />
+          <label class="toggle">
+            <input type="checkbox" class="enabled" checked />
+            <span class="toggle-ui"></span>
+            <span class="toggle-text">启用</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" class="disable" />
+            <span class="toggle-ui"></span>
+            <span class="toggle-text">禁用翻页</span>
+          </label>
+          <button class="remove" type="button">删除</button>
+        </div>
+        <div class="grid two">
+          <label class="field">
+            <span>上一页选择器</span>
+            <textarea class="prev" placeholder="例：.pager .prev"></textarea>
+          </label>
+          <label class="field">
+            <span>下一页选择器</span>
+            <textarea class="next" placeholder="例：.pager .next"></textarea>
+          </label>
+        </div>
+      </div>
+    </template>
+
+    <script src="options.js"></script>
+  </body>
+</html>
