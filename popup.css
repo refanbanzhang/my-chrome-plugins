@@ -1,28 +1,163 @@
+:root {
+  --bg: #f7f9fc;
+  --card: #ffffff;
+  --border: #dbe3f0;
+  --text: #13213a;
+  --muted: #5f6f8a;
+  --primary: #1f5eff;
+  --primary-hover: #154de0;
+  --danger: #c03636;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
 .container {
-  width: 300px;
-  padding: 15px;
+  width: 340px;
+  padding: 16px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.sub-title {
+  margin: 6px 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.list-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.blacklist {
+  max-height: 190px;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
 }
 
 .blacklist-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 5px;
-  margin: 5px 0;
+  gap: 10px;
+  padding: 7px 6px;
+  border-bottom: 1px solid #eef2f8;
+}
+
+.blacklist-item:last-child {
+  border-bottom: none;
+}
+
+.domain-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.empty-state {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px;
 }
 
 .add-form {
-  margin-top: 15px;
+  margin-top: 12px;
   display: flex;
-  gap: 10px;
+  gap: 8px;
+}
+
+.action-row {
+  margin-top: 8px;
+  display: flex;
 }
 
 button {
   cursor: pointer;
-  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 8px 12px;
+  font-size: 13px;
+  transition: background-color 0.2s ease;
+}
+
+#addDomain {
+  background: var(--primary);
+  color: #fff;
+}
+
+#addDomain:hover {
+  background: var(--primary-hover);
+}
+
+.secondary-btn {
+  width: 100%;
+  background: #eef4ff;
+  color: #1d3f96;
+  border-color: #cfddff;
+}
+
+.secondary-btn:hover {
+  background: #dce9ff;
+}
+
+.secondary-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.delete-btn {
+  background: #fff6f6;
+  color: var(--danger);
+  border-color: #ffd9d9;
+  padding: 5px 8px;
 }
 
 input {
   flex: 1;
-  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+input:focus {
+  outline: 2px solid #bfd1ff;
+  border-color: #93b0ff;
+}
+
+.status {
+  min-height: 18px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.status-error {
+  color: var(--danger);
+}
+
+.status-success {
+  color: #1d7a39;
 }

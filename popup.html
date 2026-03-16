@@ -4,15 +4,34 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="popup.css">
-  <title>网站黑名单</title>
+  <title>历史记录过滤</title>
 </head>
 <body>
   <div class="container">
-    <h2>网站黑名单</h2>
-    <div id="blacklist"></div>
+    <h2>历史记录过滤</h2>
+    <p class="sub-title">命中下列域名时，将自动清理对应浏览历史。</p>
+
+    <div class="list-meta">
+      <span>过滤列表</span>
+      <span id="listCount">0</span>
+    </div>
+
+    <div id="blacklist" class="blacklist"></div>
+    <p id="status" class="status" aria-live="polite"></p>
+
+    <div class="action-row">
+      <button id="cleanNow" class="secondary-btn" type="button">立即清理</button>
+    </div>
+
     <div class="add-form">
-      <input type="text" id="newDomain" placeholder="输入要屏蔽的域名">
-      <button id="addDomain">添加</button>
+      <input
+        type="text"
+        id="newDomain"
+        placeholder="例如：weibo.com"
+        aria-label="新增过滤域名"
+        autocomplete="off"
+      >
+      <button id="addDomain" type="button">添加</button>
     </div>
   </div>
   <script src="./js/popup.js"></script>
