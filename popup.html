@@ -7,31 +7,32 @@
   <title>历史记录过滤</title>
 </head>
 <body>
-  <div class="container">
-    <h2>历史记录过滤</h2>
-    <p class="sub-title">命中下列域名时，将自动清理对应浏览历史。</p>
+  <div class="history-popup">
+    <h2 class="history-popup__title">历史记录过滤</h2>
+    <p class="history-popup__subtitle">命中下列域名时，将自动清理对应浏览历史。</p>
 
-    <div class="list-meta">
+    <div class="history-popup__meta">
       <span>过滤列表</span>
-      <span id="listCount">0</span>
+      <span id="listCount" class="history-popup__count">0</span>
     </div>
 
-    <div id="blacklist" class="blacklist"></div>
-    <p id="status" class="status" aria-live="polite"></p>
+    <div id="blacklist" class="history-popup__list"></div>
+    <p id="status" class="history-popup__status" aria-live="polite"></p>
 
-    <div class="action-row">
-      <button id="cleanNow" class="secondary-btn" type="button">立即清理</button>
+    <div class="history-popup__actions">
+      <button id="cleanNow" class="btn btn--secondary" type="button">立即清理</button>
     </div>
 
-    <div class="add-form">
+    <div class="history-popup__form">
       <input
         type="text"
         id="newDomain"
+        class="history-popup__input"
         placeholder="例如：weibo.com"
         aria-label="新增过滤域名"
         autocomplete="off"
       >
-      <button id="addDomain" type="button">添加</button>
+      <button id="addDomain" class="btn btn--primary" type="button">添加</button>
     </div>
   </div>
   <script src="./js/popup.js"></script>

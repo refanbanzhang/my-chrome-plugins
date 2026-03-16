@@ -20,24 +20,24 @@ body {
   color: var(--text);
 }
 
-.container {
+.history-popup {
   width: 340px;
   padding: 16px;
 }
 
-h2 {
+.history-popup__title {
   margin: 0;
   font-size: 18px;
 }
 
-.sub-title {
+.history-popup__subtitle {
   margin: 6px 0 12px;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.4;
 }
 
-.list-meta {
+.history-popup__meta {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -46,7 +46,7 @@ h2 {
   margin-bottom: 6px;
 }
 
-.blacklist {
+.history-popup__list {
   max-height: 190px;
   overflow-y: auto;
   background: var(--card);
@@ -55,7 +55,7 @@ h2 {
   padding: 8px;
 }
 
-.blacklist-item {
+.history-popup__item {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -64,35 +64,35 @@ h2 {
   border-bottom: 1px solid #eef2f8;
 }
 
-.blacklist-item:last-child {
+.history-popup__item:last-child {
   border-bottom: none;
 }
 
-.domain-text {
+.history-popup__domain {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
 }
 
-.empty-state {
+.history-popup__empty {
   color: var(--muted);
   font-size: 13px;
   padding: 8px;
 }
 
-.add-form {
+.history-popup__form {
   margin-top: 12px;
   display: flex;
   gap: 8px;
 }
 
-.action-row {
+.history-popup__actions {
   margin-top: 8px;
   display: flex;
 }
 
-button {
+.btn {
   cursor: pointer;
   border-radius: 8px;
   border: 1px solid transparent;
@@ -101,39 +101,39 @@ button {
   transition: background-color 0.2s ease;
 }
 
-#addDomain {
+.btn--primary {
   background: var(--primary);
   color: #fff;
 }
 
-#addDomain:hover {
+.btn--primary:hover {
   background: var(--primary-hover);
 }
 
-.secondary-btn {
+.btn--secondary {
   width: 100%;
   background: #eef4ff;
   color: #1d3f96;
   border-color: #cfddff;
 }
 
-.secondary-btn:hover {
+.btn--secondary:hover {
   background: #dce9ff;
 }
 
-.secondary-btn:disabled {
+.btn:disabled {
   cursor: not-allowed;
   opacity: 0.7;
 }
 
-.delete-btn {
+.btn--danger {
   background: #fff6f6;
   color: var(--danger);
   border-color: #ffd9d9;
   padding: 5px 8px;
 }
 
-input {
+.history-popup__input {
   flex: 1;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -142,22 +142,22 @@ input {
   min-width: 0;
 }
 
-input:focus {
+.history-popup__input:focus {
   outline: 2px solid #bfd1ff;
   border-color: #93b0ff;
 }
 
-.status {
+.history-popup__status {
   min-height: 18px;
   margin: 8px 0 0;
   font-size: 12px;
   color: var(--muted);
 }
 
-.status-error {
+.history-popup__status--error {
   color: var(--danger);
 }
 
-.status-success {
+.history-popup__status--success {
   color: #1d7a39;
 }

@@ -10,9 +10,9 @@ const cleanNowButton = document.getElementById('cleanNow')
 
 const setStatus = (message, type = '') => {
   status.textContent = message
-  status.className = 'status'
+  status.className = 'history-popup__status'
   if (type) {
-    status.classList.add(`status-${type}`)
+    status.classList.add(`history-popup__status--${type}`)
   }
 }
 
@@ -96,7 +96,7 @@ const renderBlacklist = (blackList) => {
 
   if (blackList.length === 0) {
     const emptyState = document.createElement('div')
-    emptyState.className = 'empty-state'
+    emptyState.className = 'history-popup__empty'
     emptyState.textContent = '暂无过滤域名，添加后将自动清理对应网站历史记录。'
     container.appendChild(emptyState)
     return
@@ -104,15 +104,15 @@ const renderBlacklist = (blackList) => {
 
   blackList.forEach((domain) => {
     const item = document.createElement('div')
-    item.className = 'blacklist-item'
+    item.className = 'history-popup__item'
 
     const domainText = document.createElement('span')
-    domainText.className = 'domain-text'
+    domainText.className = 'history-popup__domain'
     domainText.textContent = domain
 
     const button = document.createElement('button')
     button.type = 'button'
-    button.className = 'delete-btn'
+    button.className = 'btn btn--danger'
     button.dataset.domain = domain
     button.textContent = '删除'
 
