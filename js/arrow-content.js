@@ -1,4 +1,7 @@
 (() => {
+  if (window.__arrowPagerInjected) return;
+  window.__arrowPagerInjected = true;
+
   const TEXT_HINTS = {
     prev: [
       "上一页",
@@ -274,7 +277,7 @@
 
   function parseSelectors(value) {
     return String(value || "")
-      .split(/[,\\n]/)
+      .split(/[,\n]/)
       .map((s) => s.trim())
       .filter(Boolean);
   }
@@ -305,7 +308,7 @@
     }
     if (normalized.includes("*")) {
       const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const regexText = "^" + escaped.replace(/\\*/g, ".*") + "$";
+      const regexText = "^" + escaped.replace(/\\\*/g, ".*") + "$";
       try {
         return new RegExp(regexText, "i").test(hostname);
       } catch {
@@ -462,7 +465,7 @@
   }
 
   function isJavascriptHref(href) {
-    return /^\\s*javascript:/i.test(href || "");
+    return /^\s*javascript:/i.test(href || "");
   }
 
   function clickElement(el) {

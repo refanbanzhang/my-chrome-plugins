@@ -38,6 +38,15 @@
   "themeSwitchTo": {
     "message": "点击切换到 $1"
   },
+  "languageChinese": {
+    "message": "中文"
+  },
+  "languageEnglish": {
+    "message": "English"
+  },
+  "languageSwitchTo": {
+    "message": "点击切换到 $1"
+  },
   "logoAlt": {
     "message": "微博助手 logo"
   },

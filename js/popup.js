@@ -2,6 +2,7 @@ const BLACKLIST_KEY = 'blackList'
 const BLACKLIST_DATA_KEY = 'blackListData'
 const MEDIA_DEFAULT_MINUTES_KEY = 'mediaAutoStopDefaultMinutes'
 const THEME_PREFERENCE_KEY = 'popupThemePreference'
+const LANGUAGE_PREFERENCE_KEY = 'popupLanguagePreference'
 const THEME_PREFERENCE_CYCLE = ['system', 'dark', 'light']
 const SYNC_STATUS = {
   SYNCED: 'synced',
@@ -20,6 +21,9 @@ const FALLBACK_MESSAGES = {
   themeDark: '主题：深色',
   themeLight: '主题：浅色',
   themeSwitchTo: '点击切换到 $1',
+  languageChinese: '中文',
+  languageEnglish: 'English',
+  languageSwitchTo: '点击切换到 $1',
   logoAlt: '微博助手 logo',
   arrowSectionTitle: '箭头翻页',
   arrowSectionTip: '打开“箭头键翻页规则”页面，配置站点级上一页/下一页选择器。',
@@ -74,6 +78,7 @@ const mediaMinutesInput = document.getElementById('mediaMinutes')
 const mediaTimerToggle = document.getElementById('mediaTimerToggle')
 const mediaTimerStatus = document.getElementById('mediaTimerStatus')
 const openArrowSettingsButton = document.getElementById('openArrowSettings')
+const languageToggle = document.getElementById('languageToggle')
 const themeToggle = document.getElementById('themeToggle')
 const syncStatus = document.getElementById('syncStatus')
 const toastContainer = document.getElementById('toastContainer')
@@ -86,6 +91,9 @@ let currentDomainPendingMap = {}
 let currentThemePreference = 'system'
 let draggingDomain = ''
 let currentSyncStatus = SYNC_STATUS.SYNCED
+let currentLanguagePreference = 'auto'
+let activeLocale = 'zh_CN'
+const localeMessagesCache = {}
 
 const ensureSubstitutionsArray = (substitutions) => {
   if (Array.isArray(substitutions)) return substitutions
@@ -101,10 +109,64 @@ const formatFallbackMessage = (template, substitutions) => {
   })
 }
 
+const normalizeLanguagePreference = (preference) => {
+  if (preference === 'en' || preference === 'zh_CN') return preference
+  return 'auto'
+}
+
+const resolveLocale = (preference = currentLanguagePreference) => {
+  if (preference === 'en' || preference === 'zh_CN') {
+    return preference
+  }
+  return chrome.i18n.getUILanguage().toLowerCase().startsWith('en') ? 'en' : 'zh_CN'
+}
+
+const normalizeLocaleMessages = (rawMessages) => {
+  const result = {}
+  if (!rawMessages || typeof rawMessages !== 'object') return result
+
+  Object.entries(rawMessages).forEach(([key, entry]) => {
+    if (entry && typeof entry.message === 'string') {
+      result[key] = entry.message
+    }
+  })
+  return result
+}
+
+const loadLocaleMessages = async (locale) => {
+  if (localeMessagesCache[locale]) return localeMessagesCache[locale]
+
+  try {
+    const response = await fetch(chrome.runtime.getURL(`_locales/${locale}/messages.json`))
+    if (!response.ok) throw new Error(`Failed to load locale: ${locale}`)
+    const rawMessages = await response.json()
+    localeMessagesCache[locale] = normalizeLocaleMessages(rawMessages)
+    return localeMessagesCache[locale]
+  } catch (error) {
+    localeMessagesCache[locale] = {}
+    return localeMessagesCache[locale]
+  }
+}
+
+const getMessageFromLocaleCache = (locale, key, args) => {
+  const localeMessages = localeMessagesCache[locale]
+  if (!localeMessages) return ''
+  const template = localeMessages[key]
+  if (!template) return ''
+  return formatFallbackMessage(template, args)
+}
+
 const t = (key, substitutions = []) => {
   const args = ensureSubstitutionsArray(substitutions).map((value) => String(value))
+
+  const activeMessage = getMessageFromLocaleCache(activeLocale, key, args)
+  if (activeMessage) return activeMessage
+
   const localized = chrome.i18n.getMessage(key, args)
-  if (localized) return localized
+  if (localized && currentLanguagePreference === 'auto') return localized
+
+  const zhFallbackFromLocale = getMessageFromLocaleCache('zh_CN', key, args)
+  if (zhFallbackFromLocale) return zhFallbackFromLocale
 
   const fallback = FALLBACK_MESSAGES[key]
   if (fallback) return formatFallbackMessage(fallback, args)
@@ -113,7 +175,6 @@ const t = (key, substitutions = []) => {
 
 const applyI18nToPage = () => {
   document.title = t('popupDocumentTitle')
-  document.documentElement.lang = chrome.i18n.getUILanguage().startsWith('en') ? 'en' : 'zh-CN'
 
   document.querySelectorAll('[data-i18n]').forEach((element) => {
     const key = element.getAttribute('data-i18n')
@@ -232,6 +293,55 @@ const cycleThemePreference = () => {
   chrome.storage.sync.set({ [THEME_PREFERENCE_KEY]: nextPreference }, () => {
     themeToggle.disabled = false
     applyThemePreference(nextPreference)
+  })
+}
+
+const getLanguageLabel = (locale) => (locale === 'en' ? t('languageEnglish') : t('languageChinese'))
+
+const updateLanguageToggle = () => {
+  if (!languageToggle) return
+  const nextLocale = activeLocale === 'en' ? 'zh_CN' : 'en'
+  const nextLocaleLabel = getLanguageLabel(nextLocale)
+
+  languageToggle.textContent = getLanguageLabel(activeLocale)
+  languageToggle.setAttribute('aria-label', t('languageSwitchTo', nextLocaleLabel))
+  languageToggle.title = t('languageSwitchTo', nextLocaleLabel)
+}
+
+const applyLanguagePreference = async (preference = 'auto') => {
+  currentLanguagePreference = normalizeLanguagePreference(preference)
+  activeLocale = resolveLocale(currentLanguagePreference)
+  document.documentElement.lang = activeLocale === 'en' ? 'en' : 'zh-CN'
+
+  await Promise.all([loadLocaleMessages(activeLocale), loadLocaleMessages('zh_CN')])
+  applyI18nToPage()
+  applyPresetLabels()
+  applyThemePreference(currentThemePreference)
+  updateLanguageToggle()
+  setSyncStatus(currentSyncStatus)
+  renderBlacklist(currentBlacklist, currentDomainPendingMap)
+  setCleanupLoading(cleanNowButton.disabled)
+  refreshMediaTimerStatus()
+}
+
+const loadLanguagePreference = async () => {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get([LANGUAGE_PREFERENCE_KEY], async (result) => {
+      const storedPreference = normalizeLanguagePreference(result[LANGUAGE_PREFERENCE_KEY])
+      await applyLanguagePreference(storedPreference)
+      resolve()
+    })
+  })
+}
+
+const cycleLanguagePreference = () => {
+  if (!languageToggle) return
+  const nextLocale = activeLocale === 'en' ? 'zh_CN' : 'en'
+
+  languageToggle.disabled = true
+  chrome.storage.sync.set({ [LANGUAGE_PREFERENCE_KEY]: nextLocale }, async () => {
+    languageToggle.disabled = false
+    await applyLanguagePreference(nextLocale)
   })
 }
 
@@ -585,10 +695,8 @@ const clearDragState = () => {
   })
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  applyI18nToPage()
-  applyPresetLabels()
-
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadLanguagePreference()
   loadThemePreference()
   if (typeof systemThemeQuery.addEventListener === 'function') {
     systemThemeQuery.addEventListener('change', () => {
@@ -625,13 +733,15 @@ document.addEventListener('DOMContentLoaded', () => {
     mediaMinutesInput.value = Number.isInteger(minutes) && minutes >= 1 && minutes <= 1440 ? minutes : 30
   })
 
-  refreshMediaTimerStatus()
   refreshBlacklist()
 
   addButton.addEventListener('click', addDomain)
   cleanNowButton.addEventListener('click', runCleanupNow)
   if (openArrowSettingsButton) {
     openArrowSettingsButton.addEventListener('click', openArrowSettings)
+  }
+  if (languageToggle) {
+    languageToggle.addEventListener('click', cycleLanguagePreference)
   }
   themeToggle.addEventListener('click', cycleThemePreference)
   mediaTimerToggle.addEventListener('click', () => {

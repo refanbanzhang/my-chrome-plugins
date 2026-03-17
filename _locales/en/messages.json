@@ -38,6 +38,15 @@
   "themeSwitchTo": {
     "message": "Switch to $1"
   },
+  "languageChinese": {
+    "message": "Chinese"
+  },
+  "languageEnglish": {
+    "message": "English"
+  },
+  "languageSwitchTo": {
+    "message": "Switch to $1"
+  },
   "logoAlt": {
     "message": "Weibo Assistant logo"
   },

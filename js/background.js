@@ -413,6 +413,22 @@ const isInjectableUrl = (url) => {
     !url.startsWith('brave://')
 }
 
+const ensureArrowPagerInjected = async () => {
+  const tabs = await chrome.tabs.query({})
+  await Promise.all(tabs.map(async (tab) => {
+    if (!tab || !tab.id || !isInjectableUrl(tab.url)) return
+
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['js/arrow-content.js']
+      })
+    } catch (error) {
+      console.warn(`注入翻页脚本失败（tab ${tab.id}）:`, error)
+    }
+  }))
+}
+
 const setMediaBadge = (isRunning) => {
   if (!isRunning) {
     chrome.action.setBadgeText({ text: '' })
@@ -666,6 +682,9 @@ chrome.runtime.onInstalled.addListener(() => {
   ensureBlacklistInStorage().catch((error) => {
     console.error('初始化黑名单配置失败:', error)
   })
+  ensureArrowPagerInjected().catch((error) => {
+    console.error('初始化翻页脚本注入失败:', error)
+  })
   ensureMediaSettingsInStorage()
   syncMediaCountdownState().catch((error) => {
     console.error('同步媒体倒计时状态失败:', error)
@@ -675,6 +694,9 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onStartup.addListener(() => {
   ensureBlacklistInStorage().catch((error) => {
     console.error('初始化黑名单配置失败:', error)
+  })
+  ensureArrowPagerInjected().catch((error) => {
+    console.error('启动时翻页脚本注入失败:', error)
   })
   ensureMediaSettingsInStorage()
   syncMediaCountdownState().catch((error) => {
