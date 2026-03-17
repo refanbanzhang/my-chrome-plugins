@@ -21,6 +21,9 @@ const FALLBACK_MESSAGES = {
   themeLight: '主题：浅色',
   themeSwitchTo: '点击切换到 $1',
   logoAlt: '微博助手 logo',
+  arrowSectionTitle: '箭头翻页',
+  arrowSectionTip: '打开“箭头键翻页规则”页面，配置站点级上一页/下一页选择器。',
+  openArrowSettingsButton: '打开翻页设置',
   mediaSectionTitle: '媒体自动停止',
   mediaSectionTip: '倒计时结束后，自动停止所有标签页中的音视频播放。',
   mediaPresetLabel: '快捷预设',
@@ -70,6 +73,7 @@ const cleanNowButton = document.getElementById('cleanNow')
 const mediaMinutesInput = document.getElementById('mediaMinutes')
 const mediaTimerToggle = document.getElementById('mediaTimerToggle')
 const mediaTimerStatus = document.getElementById('mediaTimerStatus')
+const openArrowSettingsButton = document.getElementById('openArrowSettings')
 const themeToggle = document.getElementById('themeToggle')
 const syncStatus = document.getElementById('syncStatus')
 const toastContainer = document.getElementById('toastContainer')
@@ -565,6 +569,15 @@ const applyPresetLabels = () => {
   })
 }
 
+const openArrowSettings = () => {
+  if (chrome.runtime && typeof chrome.runtime.openOptionsPage === 'function') {
+    chrome.runtime.openOptionsPage()
+    return
+  }
+
+  window.open(chrome.runtime.getURL('arrow-options.html'), '_blank')
+}
+
 const clearDragState = () => {
   container.querySelectorAll('.history-popup__item').forEach((item) => {
     item.classList.remove('dragging')
@@ -617,6 +630,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   addButton.addEventListener('click', addDomain)
   cleanNowButton.addEventListener('click', runCleanupNow)
+  if (openArrowSettingsButton) {
+    openArrowSettingsButton.addEventListener('click', openArrowSettings)
+  }
   themeToggle.addEventListener('click', cycleThemePreference)
   mediaTimerToggle.addEventListener('click', () => {
     if (mediaTimerToggle.dataset.mode === 'stop') {

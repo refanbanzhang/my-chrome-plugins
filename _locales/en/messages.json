@@ -41,6 +41,15 @@
   "logoAlt": {
     "message": "Weibo Assistant logo"
   },
+  "arrowSectionTitle": {
+    "message": "Arrow Pager"
+  },
+  "arrowSectionTip": {
+    "message": "Open Arrow Trigger Next/Prev settings to configure site-level previous/next selectors."
+  },
+  "openArrowSettingsButton": {
+    "message": "Open Pager Settings"
+  },
   "mediaSectionTitle": {
     "message": "Auto-stop Media"
   },

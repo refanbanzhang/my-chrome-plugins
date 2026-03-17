@@ -41,6 +41,15 @@
   "logoAlt": {
     "message": "微博助手 logo"
   },
+  "arrowSectionTitle": {
+    "message": "箭头翻页"
+  },
+  "arrowSectionTip": {
+    "message": "打开“箭头键翻页规则”页面，配置站点级上一页/下一页选择器。"
+  },
+  "openArrowSettingsButton": {
+    "message": "打开翻页设置"
+  },
   "mediaSectionTitle": {
     "message": "媒体自动停止"
   },
