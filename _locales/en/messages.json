@@ -3,7 +3,7 @@
     "message": "Weibo Assistant · History Cleaner · Media Stop"
   },
   "extensionDescription": {
-    "message": "Weibo post helper + blacklist history cleanup + media countdown auto-stop"
+    "message": "Weibo post helper + blacklist history cleanup + media countdown auto-stop + arrow key pagination"
   },
   "extensionActionTitle": {
     "message": "Weibo Assistant Console"

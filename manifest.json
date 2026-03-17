@@ -21,6 +21,7 @@
       "run_at": "document_end"
     }
   ],
+  "options_page": "arrow-options.html",
   "action": {
     "default_title": "__MSG_extensionActionTitle__",
     "default_popup": "popup.html",
