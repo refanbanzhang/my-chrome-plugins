@@ -45,6 +45,13 @@
     "[id*='pagination' i]"
   ];
   const PAGE_PARAM_CANDIDATES = ["page", "p", "pg", "pageno", "pn", "pageNo", "pageIndex"];
+  const PREFETCH_AHEAD_COUNT = 10;
+  const PREFETCH_MAX_CONCURRENT = 1;
+  const PREFETCH_TIMEOUT_MS = 8000;
+  const PREFETCH_BASE_INTERVAL_MS = 1600;
+  const PREFETCH_HIDDEN_RETRY_MS = 2000;
+  const PREFETCH_ERROR_BACKOFF_MS = 60000;
+  const PREFETCH_RATE_LIMIT_BACKOFF_MS = 180000;
 
   const CLICKABLE_SELECTOR =
     "a[href], button, [role='button'], [onclick], input[type='button'], input[type='submit']";
@@ -55,6 +62,7 @@
     cooldownMs: 0,
     toastDurationMs: 1200,
     doubleTapOnly: false,
+    prefetchEnabled: true,
     globalPrev: "",
     globalNext: "",
     siteRules: []
@@ -65,6 +73,14 @@
   let lastPointerTs = 0;
   let lastArrowKey = null;
   let lastArrowTs = 0;
+  let prefetchQueue = [];
+  let activePrefetchCount = 0;
+  let prefetchScheduled = false;
+  let prefetchPumpTimer = 0;
+  let prefetchBackoffUntil = 0;
+  let prefetchConsecutiveErrors = 0;
+  const prefetchedPageUrls = new Set();
+  const queuedPrefetchUrls = new Set();
   const POINTER_WINDOW_MS = 2000;
   const DOUBLE_TAP_MS = 400;
   const MEDIA_CONTAINER_STRONG_SELECTOR =
@@ -178,6 +194,7 @@
       cooldownMs: Math.max(0, Number(raw.cooldownMs) || 0),
       toastDurationMs: Math.max(500, Math.min(5000, Number(raw.toastDurationMs) || 1200)),
       doubleTapOnly: Boolean(raw.doubleTapOnly),
+      prefetchEnabled: raw.prefetchEnabled !== false,
       globalPrev: String(raw.globalPrev || ""),
       globalNext: String(raw.globalNext || ""),
       siteRules: Array.isArray(raw.siteRules) ? raw.siteRules : []
@@ -185,9 +202,13 @@
   }
 
   function loadSettings() {
-    if (!chrome?.storage?.sync) return;
+    if (!chrome?.storage?.sync) {
+      scheduleForwardPrefetch();
+      return;
+    }
     chrome.storage.sync.get({ [STORAGE_KEY]: DEFAULT_SETTINGS }, (res) => {
       settings = normalizeSettings(res[STORAGE_KEY]);
+      scheduleForwardPrefetch();
     });
   }
 
@@ -197,6 +218,12 @@
       if (area !== "sync") return;
       if (changes[STORAGE_KEY]) {
         settings = normalizeSettings(changes[STORAGE_KEY].newValue);
+        if (!isPrefetchEnabled()) {
+          prefetchQueue = [];
+          queuedPrefetchUrls.clear();
+          clearPrefetchPumpTimer();
+        }
+        scheduleForwardPrefetch();
       }
     });
   }
@@ -468,6 +495,277 @@
     return /^\s*javascript:/i.test(href || "");
   }
 
+  function isPrefetchEnabled() {
+    return settings.prefetchEnabled !== false;
+  }
+
+  function normalizePrefetchUrl(urlString) {
+    if (!urlString) return null;
+    let url;
+    try {
+      url = new URL(urlString, window.location.href);
+    } catch {
+      return null;
+    }
+    if (!/^https?:$/.test(url.protocol)) return null;
+    if (url.origin !== window.location.origin) return null;
+    url.hash = "";
+    return url.toString();
+  }
+
+  function getSameOriginUrlFromElement(el) {
+    if (!el) return null;
+    const href = el.getAttribute?.("href");
+    if (!href || isJavascriptHref(href)) return null;
+    return normalizePrefetchUrl(href);
+  }
+
+  function collectNextUrlsFromPagination(limit) {
+    const current = getCurrentPageNumber();
+    const numbered = new Map();
+    const loose = [];
+    const containers = new Set();
+
+    for (const selector of PAGINATION_SELECTORS) {
+      const list = document.querySelectorAll(selector);
+      for (const node of list) containers.add(node);
+    }
+
+    for (const container of containers) {
+      const links = container.querySelectorAll("a[href], link[rel~='next']");
+      for (const el of links) {
+        const normalizedUrl = getSameOriginUrlFromElement(el);
+        if (!normalizedUrl) continue;
+
+        const pageNum = getPageNumberFromElement(el);
+        if (Number.isFinite(pageNum)) {
+          if (Number.isFinite(current) && pageNum <= current) continue;
+          if (!numbered.has(pageNum)) numbered.set(pageNum, normalizedUrl);
+        } else {
+          loose.push(normalizedUrl);
+        }
+      }
+    }
+
+    const urls = [];
+    if (numbered.size > 0) {
+      const pages = Array.from(numbered.keys()).sort((a, b) => a - b);
+      for (const pageNum of pages) {
+        if (Number.isFinite(current) && pageNum > current + limit) continue;
+        urls.push(numbered.get(pageNum));
+        if (urls.length >= limit) return urls;
+      }
+    }
+
+    for (const url of loose) {
+      urls.push(url);
+      if (urls.length >= limit) break;
+    }
+
+    return urls;
+  }
+
+  function buildSequentialNextUrls(limit) {
+    const base = new URL(window.location.href);
+    base.hash = "";
+
+    for (const key of PAGE_PARAM_CANDIDATES) {
+      if (!base.searchParams.has(key)) continue;
+      const value = base.searchParams.get(key);
+      const current = Number(value);
+      if (!Number.isFinite(current) || current <= 0) continue;
+
+      const urls = [];
+      for (let i = 1; i <= limit; i += 1) {
+        const next = new URL(base.toString());
+        next.searchParams.set(key, String(current + i));
+        urls.push(next.toString());
+      }
+      return urls;
+    }
+
+    const pathMatch = base.pathname.match(/(.*?)(\d+)([^\d]*)$/);
+    if (!pathMatch) return [];
+    const prefix = pathMatch[1];
+    const current = Number(pathMatch[2]);
+    const suffix = pathMatch[3];
+    if (!Number.isFinite(current) || current <= 0) return [];
+
+    const urls = [];
+    for (let i = 1; i <= limit; i += 1) {
+      const next = new URL(base.toString());
+      next.pathname = `${prefix}${current + i}${suffix}`;
+      urls.push(next.toString());
+    }
+    return urls;
+  }
+
+  function collectForwardPrefetchUrls(limit = PREFETCH_AHEAD_COUNT) {
+    const candidates = [];
+    const relNextUrl = getSameOriginUrlFromElement(findByRel("next"));
+    if (relNextUrl) candidates.push(relNextUrl);
+    candidates.push(...collectNextUrlsFromPagination(limit));
+    candidates.push(...buildSequentialNextUrls(limit));
+
+    const currentUrl = normalizePrefetchUrl(window.location.href);
+    const deduped = [];
+    const seen = new Set();
+
+    for (const candidate of candidates) {
+      const normalized = normalizePrefetchUrl(candidate);
+      if (!normalized) continue;
+      if (normalized === currentUrl) continue;
+      if (prefetchedPageUrls.has(normalized) || queuedPrefetchUrls.has(normalized)) continue;
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      deduped.push(normalized);
+      if (deduped.length >= limit) break;
+    }
+
+    return deduped;
+  }
+
+  function getPrefetchIntervalMs() {
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (!connection) return PREFETCH_BASE_INTERVAL_MS;
+    if (connection.saveData) return 3000;
+    const type = String(connection.effectiveType || "").toLowerCase();
+    if (type.includes("slow-2g")) return 4500;
+    if (type.includes("2g")) return 4000;
+    if (type.includes("3g")) return 2600;
+    return PREFETCH_BASE_INTERVAL_MS;
+  }
+
+  function clearPrefetchPumpTimer() {
+    if (!prefetchPumpTimer) return;
+    window.clearTimeout(prefetchPumpTimer);
+    prefetchPumpTimer = 0;
+  }
+
+  function schedulePrefetchPump(delayMs = 0) {
+    if (prefetchPumpTimer) return;
+    prefetchPumpTimer = window.setTimeout(() => {
+      prefetchPumpTimer = 0;
+      consumePrefetchQueue();
+    }, Math.max(0, delayMs));
+  }
+
+  async function prefetchDocument(url) {
+    if (typeof window.fetch !== "function") return { ok: false, rateLimited: false };
+
+    let controller = null;
+    let timeoutId = 0;
+    if (typeof AbortController === "function") {
+      controller = new AbortController();
+      timeoutId = window.setTimeout(() => controller.abort(), PREFETCH_TIMEOUT_MS);
+    }
+
+    try {
+      const response = await window.fetch(url, {
+        method: "GET",
+        credentials: "include",
+        mode: "same-origin",
+        cache: "force-cache",
+        signal: controller ? controller.signal : undefined
+      });
+      if (response?.status === 429 || response?.status === 403) {
+        return { ok: false, rateLimited: true };
+      }
+      if (!response?.ok) {
+        return { ok: false, rateLimited: false };
+      }
+      return { ok: true, rateLimited: false };
+    } catch {
+      return { ok: false, rateLimited: false };
+    } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
+    }
+  }
+
+  function consumePrefetchQueue() {
+    if (activePrefetchCount >= PREFETCH_MAX_CONCURRENT) return;
+    if (prefetchQueue.length === 0) return;
+    if (document.visibilityState === "hidden") {
+      schedulePrefetchPump(PREFETCH_HIDDEN_RETRY_MS);
+      return;
+    }
+
+    const now = Date.now();
+    if (prefetchBackoffUntil > now) {
+      schedulePrefetchPump(prefetchBackoffUntil - now);
+      return;
+    }
+
+    const nextUrl = prefetchQueue.shift();
+    queuedPrefetchUrls.delete(nextUrl);
+    prefetchedPageUrls.add(nextUrl);
+    activePrefetchCount += 1;
+
+    prefetchDocument(nextUrl)
+      .then((result) => {
+        if (result.rateLimited) {
+          prefetchBackoffUntil = Date.now() + PREFETCH_RATE_LIMIT_BACKOFF_MS;
+          prefetchConsecutiveErrors = 0;
+          prefetchQueue = [];
+          queuedPrefetchUrls.clear();
+          return;
+        }
+        if (!result.ok) {
+          prefetchConsecutiveErrors += 1;
+          if (prefetchConsecutiveErrors >= 2) {
+            prefetchBackoffUntil = Date.now() + PREFETCH_ERROR_BACKOFF_MS;
+            prefetchConsecutiveErrors = 0;
+          }
+          return;
+        }
+        prefetchConsecutiveErrors = 0;
+      })
+      .finally(() => {
+        activePrefetchCount -= 1;
+        clearPrefetchPumpTimer();
+        schedulePrefetchPump(getPrefetchIntervalMs());
+      });
+  }
+
+  function enqueuePrefetch(urls) {
+    if (!Array.isArray(urls) || urls.length === 0) return;
+    for (const url of urls) {
+      if (!url) continue;
+      if (prefetchedPageUrls.has(url) || queuedPrefetchUrls.has(url)) continue;
+      queuedPrefetchUrls.add(url);
+      prefetchQueue.push(url);
+    }
+    clearPrefetchPumpTimer();
+    schedulePrefetchPump(200);
+  }
+
+  function scheduleForwardPrefetch() {
+    if (prefetchScheduled) return;
+    prefetchScheduled = true;
+
+    const run = () => {
+      prefetchScheduled = false;
+      if (isSiteDisabled()) return;
+      if (!isPrefetchEnabled()) return;
+      if (Date.now() < prefetchBackoffUntil) return;
+      const urls = collectForwardPrefetchUrls(PREFETCH_AHEAD_COUNT);
+      enqueuePrefetch(urls);
+    };
+
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(run, { timeout: 1200 });
+    } else {
+      window.setTimeout(run, 120);
+    }
+  }
+
+  function scheduleForwardPrefetchSoon() {
+    if (!isPrefetchEnabled()) return;
+    window.setTimeout(() => {
+      scheduleForwardPrefetch();
+    }, 260);
+  }
+
   function clickElement(el) {
     if (!el) return false;
     if (isLikelyDisabled(el)) return false;
@@ -628,52 +926,38 @@
     return hint ? `${hint} · ${actionLabel}` : actionLabel;
   }
 
+  function triggerSuccess(direction, targetEl) {
+    showToast(
+      buildToastMessage(direction === "next" ? "下一页" : "上一页", getExpectedPageNumber(direction, targetEl)),
+      "ok"
+    );
+    scheduleForwardPrefetchSoon();
+    return true;
+  }
+
   function trigger(direction) {
     const customEl = findByCustom(direction);
     if (clickElement(customEl)) {
-      showToast(
-        buildToastMessage(direction === "next" ? "下一页" : "上一页", getExpectedPageNumber(direction, customEl)),
-        "ok"
-      );
-      return true;
+      return triggerSuccess(direction, customEl);
     }
 
     const relEl = findByRel(direction);
     if (clickElement(relEl)) {
-      showToast(
-        buildToastMessage(direction === "next" ? "下一页" : "上一页", getExpectedPageNumber(direction, relEl)),
-        "ok"
-      );
-      return true;
+      return triggerSuccess(direction, relEl);
     }
 
     const paginationEl = findInPagination(direction);
     if (clickElement(paginationEl)) {
-      showToast(
-        buildToastMessage(
-          direction === "next" ? "下一页" : "上一页",
-          getExpectedPageNumber(direction, paginationEl)
-        ),
-        "ok"
-      );
-      return true;
+      return triggerSuccess(direction, paginationEl);
     }
 
     const best = findBestGlobal(direction);
     if (clickElement(best)) {
-      showToast(
-        buildToastMessage(direction === "next" ? "下一页" : "上一页", getExpectedPageNumber(direction, best)),
-        "ok"
-      );
-      return true;
+      return triggerSuccess(direction, best);
     }
 
     if (urlNextPrev(direction)) {
-      showToast(
-        buildToastMessage(direction === "next" ? "下一页" : "上一页", getExpectedPageNumber(direction, null)),
-        "ok"
-      );
-      return true;
+      return triggerSuccess(direction, null);
     }
 
     const pageHint = formatPageHint(getCurrentPageNumber());
@@ -728,6 +1012,11 @@
   window.addEventListener("pointermove", recordPointerTarget, true);
   window.addEventListener("mousemove", recordPointerTarget, true);
   window.addEventListener("touchstart", recordPointerTarget, true);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    clearPrefetchPumpTimer();
+    schedulePrefetchPump(300);
+  });
 
   loadSettings();
   watchSettings();

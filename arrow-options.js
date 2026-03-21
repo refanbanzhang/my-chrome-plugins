@@ -6,6 +6,7 @@
     cooldownMs: 0,
     toastDurationMs: 1200,
     doubleTapOnly: false,
+    prefetchEnabled: true,
     globalPrev: "",
     globalNext: "",
     siteRules: []
@@ -20,6 +21,7 @@
   const cooldownMsInput = document.getElementById("cooldownMs");
   const toastDurationMsInput = document.getElementById("toastDurationMs");
   const doubleTapOnlyToggle = document.getElementById("doubleTapOnly");
+  const prefetchEnabledToggle = document.getElementById("prefetchEnabledToggle");
   const rulesContainer = document.getElementById("rules");
   const addRuleButton = document.getElementById("addRule");
   const addCurrentSiteButton = document.getElementById("addCurrentSite");
@@ -141,6 +143,7 @@
       cooldownMs: Math.max(0, Number(cooldownMsInput.value) || 0),
       toastDurationMs: Math.max(500, Math.min(5000, Number(toastDurationMsInput?.value) || 1200)),
       doubleTapOnly: Boolean(doubleTapOnlyToggle?.checked),
+      prefetchEnabled: Boolean(prefetchEnabledToggle?.checked),
       globalPrev: globalPrev.value.trim(),
       globalNext: globalNext.value.trim(),
       siteRules: getRulesFromUI()
@@ -169,6 +172,7 @@
       cooldownMs: Math.max(0, Number(raw.cooldownMs) || 0),
       toastDurationMs: Math.max(500, Math.min(5000, Number(raw.toastDurationMs) || 1200)),
       doubleTapOnly: Boolean(raw.doubleTapOnly),
+      prefetchEnabled: raw.prefetchEnabled !== false,
       globalPrev: String(raw.globalPrev || ""),
       globalNext: String(raw.globalNext || ""),
       siteRules: Array.isArray(raw.siteRules) ? raw.siteRules : []
@@ -184,6 +188,7 @@
       cooldownMsInput.value = String(s.cooldownMs || 0);
       if (toastDurationMsInput) toastDurationMsInput.value = String(s.toastDurationMs ?? 1200);
       if (doubleTapOnlyToggle) doubleTapOnlyToggle.checked = Boolean(s.doubleTapOnly);
+      if (prefetchEnabledToggle) prefetchEnabledToggle.checked = s.prefetchEnabled !== false;
       globalPrev.value = s.globalPrev;
       globalNext.value = s.globalNext;
       renderRules(s.siteRules);
@@ -198,6 +203,7 @@
     cooldownMsInput.value = String(DEFAULT_SETTINGS.cooldownMs);
     if (toastDurationMsInput) toastDurationMsInput.value = String(DEFAULT_SETTINGS.toastDurationMs);
     if (doubleTapOnlyToggle) doubleTapOnlyToggle.checked = DEFAULT_SETTINGS.doubleTapOnly;
+    if (prefetchEnabledToggle) prefetchEnabledToggle.checked = DEFAULT_SETTINGS.prefetchEnabled;
     globalPrev.value = DEFAULT_SETTINGS.globalPrev;
     globalNext.value = DEFAULT_SETTINGS.globalNext;
     renderRules(DEFAULT_SETTINGS.siteRules);
@@ -227,6 +233,7 @@
         cooldownMsInput.value = String(s.cooldownMs || 0);
         if (toastDurationMsInput) toastDurationMsInput.value = String(s.toastDurationMs ?? 1200);
         if (doubleTapOnlyToggle) doubleTapOnlyToggle.checked = Boolean(s.doubleTapOnly);
+        if (prefetchEnabledToggle) prefetchEnabledToggle.checked = s.prefetchEnabled !== false;
         globalPrev.value = s.globalPrev;
         globalNext.value = s.globalNext;
         renderRules(s.siteRules);
@@ -287,6 +294,7 @@
   cooldownMsInput.addEventListener("input", scheduleSave);
   if (toastDurationMsInput) toastDurationMsInput.addEventListener("input", scheduleSave);
   if (doubleTapOnlyToggle) doubleTapOnlyToggle.addEventListener("change", scheduleSave);
+  if (prefetchEnabledToggle) prefetchEnabledToggle.addEventListener("change", scheduleSave);
 
   loadSettings();
 })();
