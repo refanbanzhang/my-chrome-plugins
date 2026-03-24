@@ -46,12 +46,19 @@
   ];
   const PAGE_PARAM_CANDIDATES = ["page", "p", "pg", "pageno", "pn", "pageNo", "pageIndex"];
   const PREFETCH_AHEAD_COUNT = 10;
+  const PREFETCH_PRERENDER_COUNT = 1;
   const PREFETCH_MAX_CONCURRENT = 1;
+  const PREFETCH_MAX_RETRIES_PER_URL = 1;
+  const PREFETCH_HISTORY_SESSION_KEY = "__arrowPagerPrefetchHistoryV1";
+  const PREFETCH_HISTORY_STORAGE_PREFIX = "__arrowPagerPrefetchHistoryV1:";
+  const PREFETCH_HISTORY_STORAGE_TTL_MS = 6 * 60 * 60 * 1000;
+  const PREFETCH_HISTORY_MAX_SIZE = 240;
   const PREFETCH_TIMEOUT_MS = 8000;
   const PREFETCH_BASE_INTERVAL_MS = 1600;
   const PREFETCH_HIDDEN_RETRY_MS = 2000;
   const PREFETCH_ERROR_BACKOFF_MS = 60000;
   const PREFETCH_RATE_LIMIT_BACKOFF_MS = 180000;
+  const SPECULATION_RULE_SCRIPT_ID = "arrowPagerSpeculationRules";
 
   const CLICKABLE_SELECTOR =
     "a[href], button, [role='button'], [onclick], input[type='button'], input[type='submit']";
@@ -62,6 +69,8 @@
     cooldownMs: 0,
     toastDurationMs: 1200,
     doubleTapOnly: false,
+    softNavigationOnly: true,
+    hardNavigateFallback: false,
     prefetchEnabled: true,
     globalPrev: "",
     globalNext: "",
@@ -79,8 +88,12 @@
   let prefetchPumpTimer = 0;
   let prefetchBackoffUntil = 0;
   let prefetchConsecutiveErrors = 0;
+  let speculationRulesScript = null;
+  let speculationRulesSerialized = "";
   const prefetchedPageUrls = new Set();
   const queuedPrefetchUrls = new Set();
+  const inflightPrefetchUrls = new Set();
+  const prefetchRetryCounts = new Map();
   const POINTER_WINDOW_MS = 2000;
   const DOUBLE_TAP_MS = 400;
   const MEDIA_CONTAINER_STRONG_SELECTOR =
@@ -186,6 +199,76 @@
     return (text || "").trim().toLowerCase();
   }
 
+  function persistPrefetchHistory() {
+    try {
+      const urls = Array.from(prefetchedPageUrls);
+      const sliced = urls.slice(Math.max(0, urls.length - PREFETCH_HISTORY_MAX_SIZE));
+      sessionStorage.setItem(PREFETCH_HISTORY_SESSION_KEY, JSON.stringify(sliced));
+
+      const storageKey = `${PREFETCH_HISTORY_STORAGE_PREFIX}${window.location.origin}`;
+      if (chrome?.storage?.local?.set) {
+        chrome.storage.local.set({
+          [storageKey]: {
+            updatedAt: Date.now(),
+            urls: sliced
+          }
+        });
+      }
+    } catch {
+      // Ignore sessionStorage failures.
+    }
+  }
+
+  function rememberPrefetchedUrls(urls) {
+    if (!Array.isArray(urls) || urls.length === 0) return;
+    let changed = false;
+    for (const raw of urls) {
+      const normalized = normalizePrefetchUrl(raw);
+      if (!normalized) continue;
+      if (prefetchedPageUrls.has(normalized)) {
+        prefetchedPageUrls.delete(normalized);
+      } else {
+        changed = true;
+      }
+      prefetchedPageUrls.add(normalized);
+      while (prefetchedPageUrls.size > PREFETCH_HISTORY_MAX_SIZE) {
+        const oldest = prefetchedPageUrls.values().next().value;
+        if (!oldest) break;
+        prefetchedPageUrls.delete(oldest);
+        changed = true;
+      }
+    }
+    if (changed) persistPrefetchHistory();
+  }
+
+  function hydratePrefetchHistory() {
+    try {
+      const raw = sessionStorage.getItem(PREFETCH_HISTORY_SESSION_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      rememberPrefetchedUrls(parsed);
+    } catch {
+      // Ignore malformed history entries.
+    }
+
+    const storageKey = `${PREFETCH_HISTORY_STORAGE_PREFIX}${window.location.origin}`;
+    if (!chrome?.storage?.local?.get) return;
+    chrome.storage.local.get([storageKey], (res) => {
+      const entry = res?.[storageKey];
+      if (!entry || typeof entry !== "object") return;
+      const updatedAt = Number(entry.updatedAt) || 0;
+      if (!updatedAt || (Date.now() - updatedAt) > PREFETCH_HISTORY_STORAGE_TTL_MS) {
+        if (chrome?.storage?.local?.remove) {
+          chrome.storage.local.remove(storageKey);
+        }
+        return;
+      }
+      const urls = Array.isArray(entry.urls) ? entry.urls : [];
+      rememberPrefetchedUrls(urls);
+    });
+  }
+
   function normalizeSettings(raw) {
     if (!raw || typeof raw !== "object") return { ...DEFAULT_SETTINGS };
     return {
@@ -194,6 +277,8 @@
       cooldownMs: Math.max(0, Number(raw.cooldownMs) || 0),
       toastDurationMs: Math.max(500, Math.min(5000, Number(raw.toastDurationMs) || 1200)),
       doubleTapOnly: Boolean(raw.doubleTapOnly),
+      softNavigationOnly: raw.softNavigationOnly !== false,
+      hardNavigateFallback: raw.hardNavigateFallback === true,
       prefetchEnabled: raw.prefetchEnabled !== false,
       globalPrev: String(raw.globalPrev || ""),
       globalNext: String(raw.globalNext || ""),
@@ -221,6 +306,8 @@
         if (!isPrefetchEnabled()) {
           prefetchQueue = [];
           queuedPrefetchUrls.clear();
+          prefetchRetryCounts.clear();
+          clearSpeculationRules();
           clearPrefetchPumpTimer();
         }
         scheduleForwardPrefetch();
@@ -458,11 +545,20 @@
     return null;
   }
 
-  function findByRel(direction) {
+  function findRelAnchor(direction) {
     const rel = direction === "next" ? "next" : "prev";
-    const link = document.querySelector(`a[rel~='${rel}']`);
-    if (link) return link;
-    return document.querySelector(`link[rel~='${rel}']`);
+    const anchors = Array.from(document.querySelectorAll(`a[rel~='${rel}'][href]`));
+    for (const anchor of anchors) {
+      if (!isVisible(anchor)) continue;
+      if (isLikelyDisabled(anchor)) continue;
+      return anchor;
+    }
+    return null;
+  }
+
+  function findRelLink(direction) {
+    const rel = direction === "next" ? "next" : "prev";
+    return document.querySelector(`link[rel~='${rel}'][href]`);
   }
 
   function findInPagination(direction) {
@@ -481,6 +577,23 @@
     return null;
   }
 
+  function hasHardNavigationCandidate(direction) {
+    const candidates = [
+      findByCustom(direction),
+      findInPagination(direction),
+      findBestGlobal(direction),
+      findRelAnchor(direction)
+    ];
+
+    for (const el of candidates) {
+      if (!el) continue;
+      if (isLikelyDisabled(el)) continue;
+      if (isSoftNavigableElement(el)) continue;
+      return true;
+    }
+    return false;
+  }
+
   function isLikelyDisabled(el) {
     if (!el) return true;
     if (el.disabled) return true;
@@ -493,6 +606,46 @@
 
   function isJavascriptHref(href) {
     return /^\s*javascript:/i.test(href || "");
+  }
+
+  function isSoftNavigableElement(el) {
+    if (!el) return false;
+    const tag = el.tagName;
+    if (!tag) return false;
+
+    if (tag === "LINK") return false;
+    if (tag === "BUTTON") return true;
+    if (tag === "INPUT") {
+      const type = normalize(el.getAttribute("type"));
+      return type === "button" || type === "submit";
+    }
+
+    const role = normalize(el.getAttribute?.("role"));
+    if (role === "button") return true;
+
+    if (tag !== "A") return true;
+
+    if (el.hasAttribute?.("onclick")) return true;
+    const href = (el.getAttribute?.("href") || "").trim();
+    if (!href) return true;
+    if (isJavascriptHref(href)) return true;
+    if (href === "#" || href.startsWith("#")) return true;
+
+    const classHint = normalize(el.className);
+    const idHint = normalize(el.id);
+    const attrs = (el.getAttributeNames?.() || []).map((name) => normalize(name));
+    const hintText = `${classHint} ${idHint} ${attrs.join(" ")}`;
+    if (
+      hintText.includes("router") ||
+      hintText.includes("ajax") ||
+      hintText.includes("pjax") ||
+      hintText.includes("turbo") ||
+      hintText.includes("spa")
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
   function isPrefetchEnabled() {
@@ -602,7 +755,9 @@
 
   function collectForwardPrefetchUrls(limit = PREFETCH_AHEAD_COUNT) {
     const candidates = [];
-    const relNextUrl = getSameOriginUrlFromElement(findByRel("next"));
+    const relNextUrl =
+      getSameOriginUrlFromElement(findRelAnchor("next")) ||
+      getSameOriginUrlFromElement(findRelLink("next"));
     if (relNextUrl) candidates.push(relNextUrl);
     candidates.push(...collectNextUrlsFromPagination(limit));
     candidates.push(...buildSequentialNextUrls(limit));
@@ -615,7 +770,13 @@
       const normalized = normalizePrefetchUrl(candidate);
       if (!normalized) continue;
       if (normalized === currentUrl) continue;
-      if (prefetchedPageUrls.has(normalized) || queuedPrefetchUrls.has(normalized)) continue;
+      if (
+        prefetchedPageUrls.has(normalized) ||
+        queuedPrefetchUrls.has(normalized) ||
+        inflightPrefetchUrls.has(normalized)
+      ) {
+        continue;
+      }
       if (seen.has(normalized)) continue;
       seen.add(normalized);
       deduped.push(normalized);
@@ -640,6 +801,101 @@
     if (!prefetchPumpTimer) return;
     window.clearTimeout(prefetchPumpTimer);
     prefetchPumpTimer = 0;
+  }
+
+  function supportsSpeculationRules() {
+    try {
+      return (
+        typeof HTMLScriptElement !== "undefined" &&
+        typeof HTMLScriptElement.supports === "function" &&
+        HTMLScriptElement.supports("speculationrules")
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function clearSpeculationRules() {
+    if (speculationRulesScript?.parentNode) {
+      speculationRulesScript.parentNode.removeChild(speculationRulesScript);
+    } else {
+      const existing = document.getElementById(SPECULATION_RULE_SCRIPT_ID);
+      if (existing?.parentNode) existing.parentNode.removeChild(existing);
+    }
+    speculationRulesScript = null;
+    speculationRulesSerialized = "";
+  }
+
+  function getOrCreateSpeculationRulesScript() {
+    if (speculationRulesScript && speculationRulesScript.isConnected) {
+      return speculationRulesScript;
+    }
+
+    const existing = document.getElementById(SPECULATION_RULE_SCRIPT_ID);
+    if (existing) {
+      speculationRulesScript = existing;
+      return speculationRulesScript;
+    }
+
+    const parent = document.head || document.documentElement;
+    if (!parent) return null;
+
+    const script = document.createElement("script");
+    script.id = SPECULATION_RULE_SCRIPT_ID;
+    script.type = "speculationrules";
+    parent.appendChild(script);
+    speculationRulesScript = script;
+    return speculationRulesScript;
+  }
+
+  function canUsePrerender() {
+    if (document.visibilityState !== "visible") return false;
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (!connection) return true;
+    if (connection.saveData) return false;
+    const type = String(connection.effectiveType || "").toLowerCase();
+    if (type.includes("slow-2g") || type.includes("2g")) return false;
+    return true;
+  }
+
+  function applySpeculationRules(urls) {
+    const result = { applied: false, prerenderedUrl: null };
+    if (!supportsSpeculationRules()) return result;
+    if (!Array.isArray(urls) || urls.length === 0) {
+      clearSpeculationRules();
+      return result;
+    }
+
+    const prerenderCount = canUsePrerender() ? PREFETCH_PRERENDER_COUNT : 0;
+    const prerenderUrls = prerenderCount > 0 ? urls.slice(0, prerenderCount) : [];
+    const prefetchUrls = urls.slice(prerenderUrls.length);
+    const coveredUrls = [...prerenderUrls, ...prefetchUrls];
+
+    const rules = {};
+    if (prerenderUrls.length > 0) {
+      rules.prerender = [{ urls: prerenderUrls, eagerness: "immediate" }];
+    }
+    if (prefetchUrls.length > 0) {
+      rules.prefetch = [{ urls: prefetchUrls, eagerness: "immediate" }];
+    }
+
+    if (Object.keys(rules).length === 0) {
+      clearSpeculationRules();
+      return result;
+    }
+
+    const serialized = JSON.stringify(rules);
+    if (serialized === speculationRulesSerialized) {
+      rememberPrefetchedUrls(coveredUrls);
+      return { applied: true, prerenderedUrl: prerenderUrls[0] || null };
+    }
+
+    const script = getOrCreateSpeculationRulesScript();
+    if (!script) return result;
+    script.textContent = serialized;
+    speculationRulesSerialized = serialized;
+    rememberPrefetchedUrls(coveredUrls);
+    return { applied: true, prerenderedUrl: prerenderUrls[0] || null };
   }
 
   function schedulePrefetchPump(delayMs = 0) {
@@ -697,8 +953,9 @@
     }
 
     const nextUrl = prefetchQueue.shift();
+    if (!nextUrl) return;
     queuedPrefetchUrls.delete(nextUrl);
-    prefetchedPageUrls.add(nextUrl);
+    inflightPrefetchUrls.add(nextUrl);
     activePrefetchCount += 1;
 
     prefetchDocument(nextUrl)
@@ -711,6 +968,14 @@
           return;
         }
         if (!result.ok) {
+          const retries = prefetchRetryCounts.get(nextUrl) || 0;
+          if (retries < PREFETCH_MAX_RETRIES_PER_URL) {
+            prefetchRetryCounts.set(nextUrl, retries + 1);
+            if (!queuedPrefetchUrls.has(nextUrl)) {
+              queuedPrefetchUrls.add(nextUrl);
+              prefetchQueue.push(nextUrl);
+            }
+          }
           prefetchConsecutiveErrors += 1;
           if (prefetchConsecutiveErrors >= 2) {
             prefetchBackoffUntil = Date.now() + PREFETCH_ERROR_BACKOFF_MS;
@@ -718,9 +983,12 @@
           }
           return;
         }
+        prefetchedPageUrls.add(nextUrl);
+        prefetchRetryCounts.delete(nextUrl);
         prefetchConsecutiveErrors = 0;
       })
       .finally(() => {
+        inflightPrefetchUrls.delete(nextUrl);
         activePrefetchCount -= 1;
         clearPrefetchPumpTimer();
         schedulePrefetchPump(getPrefetchIntervalMs());
@@ -729,12 +997,15 @@
 
   function enqueuePrefetch(urls) {
     if (!Array.isArray(urls) || urls.length === 0) return;
+    const accepted = [];
     for (const url of urls) {
       if (!url) continue;
-      if (prefetchedPageUrls.has(url) || queuedPrefetchUrls.has(url)) continue;
+      if (prefetchedPageUrls.has(url) || queuedPrefetchUrls.has(url) || inflightPrefetchUrls.has(url)) continue;
       queuedPrefetchUrls.add(url);
       prefetchQueue.push(url);
+      accepted.push(url);
     }
+    rememberPrefetchedUrls(accepted);
     clearPrefetchPumpTimer();
     schedulePrefetchPump(200);
   }
@@ -745,11 +1016,22 @@
 
     const run = () => {
       prefetchScheduled = false;
-      if (isSiteDisabled()) return;
-      if (!isPrefetchEnabled()) return;
-      if (Date.now() < prefetchBackoffUntil) return;
+      if (isSiteDisabled()) {
+        clearSpeculationRules();
+        return;
+      }
+      if (!isPrefetchEnabled()) {
+        clearSpeculationRules();
+        return;
+      }
+      if (Date.now() < prefetchBackoffUntil) {
+        clearSpeculationRules();
+        return;
+      }
       const urls = collectForwardPrefetchUrls(PREFETCH_AHEAD_COUNT);
-      enqueuePrefetch(urls);
+      const speculation = applySpeculationRules(urls);
+      const fetchFallbackUrls = speculation.applied ? [] : urls;
+      enqueuePrefetch(fetchFallbackUrls);
     };
 
     if (typeof window.requestIdleCallback === "function") {
@@ -769,6 +1051,7 @@
   function clickElement(el) {
     if (!el) return false;
     if (isLikelyDisabled(el)) return false;
+    if (settings.softNavigationOnly !== false && !isSoftNavigableElement(el)) return false;
 
     if (el.tagName === "LINK") {
       const href = el.getAttribute("href");
@@ -941,11 +1224,6 @@
       return triggerSuccess(direction, customEl);
     }
 
-    const relEl = findByRel(direction);
-    if (clickElement(relEl)) {
-      return triggerSuccess(direction, relEl);
-    }
-
     const paginationEl = findInPagination(direction);
     if (clickElement(paginationEl)) {
       return triggerSuccess(direction, paginationEl);
@@ -956,13 +1234,22 @@
       return triggerSuccess(direction, best);
     }
 
-    if (urlNextPrev(direction)) {
+    // `link[rel=next/prev]` in <head> is a metadata hint, not an interactive control.
+    // Use only visible anchor rel targets for navigation to maximize site-native, no-refresh flips.
+    const relAnchor = findRelAnchor(direction);
+    if (clickElement(relAnchor)) {
+      return triggerSuccess(direction, relAnchor);
+    }
+
+    if (settings.hardNavigateFallback && urlNextPrev(direction)) {
       return triggerSuccess(direction, null);
     }
 
     const pageHint = formatPageHint(getCurrentPageNumber());
     const reason = isSiteDisabled()
       ? "本站在禁用列表中"
+      : hasHardNavigationCandidate(direction)
+        ? "仅检测到硬跳转链接（已按无刷新策略跳过）"
       : "未找到翻页目标";
     showToast(
       pageHint ? `${pageHint} · ${reason}` : reason,
@@ -1018,6 +1305,7 @@
     schedulePrefetchPump(300);
   });
 
+  hydratePrefetchHistory();
   loadSettings();
   watchSettings();
 })();
